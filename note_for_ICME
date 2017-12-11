@@ -1,0 +1,17 @@
+1
+when doing correctness, whethr should we keep the same bitrate with previous value?
+
+2
+if enhancement tier video is not in buffer, what shall we do?
+
+3
+For RL learning, the received vp should be quantized. Not exact equal to predict
+
+4
+VP and tiles are not aligned. How to handle
+
+5
+Will we introduce pitch error?
+
+6
+5G data cost?
