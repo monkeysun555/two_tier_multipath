@@ -79,6 +79,7 @@ class streaming(object):
 				if self.video_version >= 1:
 					self.predict_yaw(yaw_trace)
 					self.predict_pitch(pitch_trace)
+					
 			self.video_fetching(network_trace, rate_cut)
 			# return
 			if not self.downloadedPartialVideo:
