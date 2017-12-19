@@ -56,7 +56,7 @@ REGULAR_CHANNEL_TRACE = 'BW_Trace_4.mat'
 REGULAR_MULTIPLE = 50
 REGULAR_ADD = 10
 
-VERSION = 3
+VERSION = 1
 if VERSION == 1:
 	NETWORK_TRACE_FILENAME = 'BW_Trace_5G_2.txt'
 	EXTRA_MULTIPLE = 1
@@ -117,6 +117,7 @@ class streaming(object):
 		self.display_time = 0.0
 		self.remaining_buffer = BUFFER_EL_INIT
 		self.less = 1
+		self.addition_time = 0.0
 
 		# self.EVR_BL_Recordset = []
 		self.EVR_EL_Recordset = []
@@ -159,7 +160,8 @@ class streaming(object):
 			previous_time, repair = self.video_fetching(network_trace, rate_cut, yaw_trace, pitch_trace, network_trace_aux)
 			# return
 			## SHOULD MODIFY
-			if not self.downloadedPartialVideo and not repair:
+			# if not self.downloadedPartialVideo and not repair:
+			if not repair:
 			# 	self.record_info = np.append(self.record_info, \
 			# 		[self.video_download_timestamp, self.buffer_size_BL, self.buffer_size_EL,
 			# 		temp_yaw, yaw_trace[int((self.video_seg_index_EL - 1)*VIDEO_FPS-VIDEO_FPS/2)],
@@ -176,6 +178,7 @@ class streaming(object):
 		print(self.video_download_timestamp)
 		print("Total freezing:", self.total_freezing)
 		print(self.display_time)
+		print(self.addition_time)
 		# print(self.GBUFFER_BL_EMPTY_COUNT)
 		# print(len(self.EVR_BL_Recordset))	
 
@@ -572,11 +575,13 @@ class streaming(object):
 				if retran_bandwidth_2 == 0:
 					print("5G Too bad")
 					self.correctness_using = 0
+					self.addition_time += (REPAIR_TIME_HEAD)
 					return	
 				downloading_5G = (extra_segment - retran_bandwidth_1*REPAIR_TIME_HEAD)/retran_bandwidth_2
 				if downloading_5G > REPAIR_TIME_THRES:
 					print("5G Too bad")
 					self.correctness_using = 0
+					self.addition_time += (REPAIR_TIME_HEAD + REPAIR_TIME_THRES)
 					return
 				# new_temprol_eff = min(1, 1 - downloading_5G)
 			# else:
@@ -584,6 +589,7 @@ class streaming(object):
 			if len(self.EVR_EL_Recordset) > 0:
 				assert self.EVR_EL_Recordset[-1][0] < correct_index
 			print("Downling 5g time:", downloading_5G)
+			self.addition_time += (REPAIR_TIME_HEAD + downloading_5G)
 			# self.buffer_size_EL += 1
 
 			# self.EVR_EL_Recordset.append([correct_index, MAX_VIDEO_VERSION, (retran_bandwidth_1+retran_bandwidth_2)/2, \
@@ -732,15 +738,18 @@ class streaming(object):
 						if retran_data_size > retran_bandwidth_1*CORRECT_TIME_HEAD:
 							if retran_bandwidth_2 == 0:
 								self.EVR_EL_Recordset[self.correct_ptr][10] = retran_data_size*CORRECT_TIME_HEAD
+								self.addition_time += CORRECT_TIME_HEAD
 								self.correctness_using = 0
 								return repair
 							downloading_5G = (retran_data_size - retran_bandwidth_1*CORRECT_TIME_HEAD)/retran_bandwidth_2
 							if downloading_5G >= CORRECT_TIME_THRES:
 								self.EVR_EL_Recordset[self.correct_ptr][10] = retran_data_size*CORRECT_TIME_THRES
 								self.correctness_using = 0
+								self.addition_time += (CORRECT_TIME_HEAD+CORRECT_TIME_THRES)
 								print("Second connection too bad!!!")
 								return repair						
 
+						self.addition_time += (CORRECT_TIME_HEAD+downloading_5G)
 						# new_temprol_eff = 1 - downloading_5G
 						new_yaw_span = 0.0
 						new_central = 0.0
@@ -950,7 +959,7 @@ def plot_cdf(trace):
 	return n, bins, patches
 
 def rate_determine(network_cdf):
-	cut_percent = [0.2, 0.5, 0.7]
+	cut_percent = [0.4, 0.6, 0.8]
 	rate_cut = []
 	cut_idx = 0
 	for cum in network_cdf:
@@ -964,7 +973,7 @@ def rate_determine(network_cdf):
 	return rate_cut
 
 def display(record_info, EVR_EL_Recordset, rate_cut, yaw_trace, pitch_trace, network_trace, bw_info):
-	print(len(record_info))
+	# print(len(record_info))
 	# print(len(EVR_EL_Recordset))
 	# print(len(EVR_BL_Recordset))
 	# record_info = np.array(record_info)
@@ -1005,6 +1014,7 @@ def display(record_info, EVR_EL_Recordset, rate_cut, yaw_trace, pitch_trace, net
 	display_bitrate = [0.0]*VIDEO_LEN
 	receive_bitrate = [0.0]*VIDEO_LEN
 	extra_cost = [0.0]*VIDEO_LEN
+	extra_freezing = [0.0]*VIDEO_LEN
 	# print(EVR_BL_Recordset)
 	# for i in range (0,BUFFER_BL_INIT):
 	# 	display_bitrate[i] += rate_cut[0]/6
@@ -1016,6 +1026,7 @@ def display(record_info, EVR_EL_Recordset, rate_cut, yaw_trace, pitch_trace, net
 	# 	receive_bitrate[EVR_BL_Recordset[i][0]] += rate_cut[EVR_BL_Recordset[i][1]]
 
 	# print(EVR_EL_Recordset)
+	total_eff = 0.0
 	for i in range(0,len(EVR_EL_Recordset)):
 		yaw_distance = 0.
 		eff= 0.
@@ -1026,14 +1037,19 @@ def display(record_info, EVR_EL_Recordset, rate_cut, yaw_trace, pitch_trace, net
 			eff = min(1, max(0, (((EVR_EL_Recordset[i][7] + USER_VP)/2) - yaw_distance)/USER_VP))
 			sum_eff += eff
 		sum_eff /= VIDEO_FPS
+		total_eff += sum_eff
 		display_bitrate[EVR_EL_Recordset[i][0]] += sum_eff*rate_cut[EVR_EL_Recordset[i][1]]
 		receive_bitrate[EVR_EL_Recordset[i][0]] += rate_cut[EVR_EL_Recordset[i][1]]
-		extra_cost[EVR_EL_Recordset[i][0]] = EVR_EL_Recordset[i][10]/8
+		extra_freezing[EVR_EL_Recordset[i][0]] = EVR_EL_Recordset[i][10]
+		extra_cost[EVR_EL_Recordset[i][0]] = EVR_EL_Recordset[i][9]
+	average_eff = total_eff/len(EVR_EL_Recordset)
+	print("Total extra cost:", sum(extra_cost))
 
 		# print (sum_eff, EVR_EL_Recordset[i][0])
 		# print(EVR_EL_Recordset[i][3]*30-15, EVR_EL_Recordset[i][3], EVR_EL_Recordset[i][5],EVR_EL_Recordset[i][9])
 	# return
 	print("Effective bitrate:", sum(display_bitrate))
+	print("Average coverage ratio:", average_eff)
 	g = plt.figure(FIGURE_NUM)
 	FIGURE_NUM += 1
 	plt.plot(range(1,VIDEO_LEN+1), display_bitrate, 'b-', label='Effective Video Bitrate')
@@ -1047,13 +1063,23 @@ def display(record_info, EVR_EL_Recordset, rate_cut, yaw_trace, pitch_trace, net
 	if IS_CORRECT:
 		q = plt.figure(FIGURE_NUM)
 		FIGURE_NUM += 1		
-		plt.bar(range(1,VIDEO_LEN+1), extra_cost, label='Freezing Time')
+		plt.bar(range(1,VIDEO_LEN+1), extra_freezing, label='Freezing Time',edgecolor='blue')
 		# plt.plot(range(1,VIDEO_LEN+1), receive_bitrate, 'r-', label='Received Video Bitrate')
 		plt.legend(loc='best')
 		plt.title('Freezing Time')
 		plt.xlabel('Second')
 		plt.ylabel('Second')
-		plt.axis([0, 600, 0, max(extra_cost)+0.2])
+		plt.axis([0, 600, 0, max(extra_freezing)+0.1])
+
+		r = plt.figure(FIGURE_NUM)
+		FIGURE_NUM += 1		
+		plt.bar(range(1,VIDEO_LEN+1), extra_cost, label='Extra Cost', edgecolor='blue')
+		# plt.plot(range(1,VIDEO_LEN+1), receive_bitrate, 'r-', label='Received Video Bitrate')
+		plt.legend(loc='best')
+		plt.title('Extra Cost')
+		plt.xlabel('Second')
+		plt.ylabel('Mb')
+		plt.axis([0, 600, 0, max(extra_cost)+ 5])
 
 	# i = plt.figure(5)
 	# plt.plot(range(1,VIDEO_LEN+1), receive_bitrate, 'r-')
@@ -1066,6 +1092,7 @@ def display(record_info, EVR_EL_Recordset, rate_cut, yaw_trace, pitch_trace, net
 	p.show()
 	if IS_CORRECT:
 		q.show()
+		r.show()
 
 	if IS_SAVING:
 		f.savefig('VP_ONLY_BT_&_ET_Buffer_Length.eps', format='eps', dpi=1000)
