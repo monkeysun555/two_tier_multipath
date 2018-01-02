@@ -56,7 +56,7 @@ REGULAR_CHANNEL_TRACE = 'BW_Trace_4.mat'
 REGULAR_MULTIPLE = 50
 REGULAR_ADD = 10
 
-VERSION = 1
+VERSION = 2
 if VERSION == 1:
 	NETWORK_TRACE_FILENAME = 'BW_Trace_5G_2.txt'
 	EXTRA_MULTIPLE = 1
@@ -178,7 +178,7 @@ class streaming(object):
 		print(self.video_download_timestamp)
 		print("Total freezing:", self.total_freezing)
 		print(self.display_time)
-		print(self.addition_time)
+		print("Extra time:", self.addition_time)
 		# print(self.GBUFFER_BL_EMPTY_COUNT)
 		# print(len(self.EVR_BL_Recordset))	
 
@@ -707,7 +707,8 @@ class streaming(object):
 							if self.decide_direction(right_boundary, new_left_boundary == -1):
 								area = [right_boundary, new_right_boundary, 1, True]
 							else:
-								area = [new_left_boundary, new_right_boundary, 1, False]
+								area = [right_boundary, new_right_boundary, 1, False]
+								# area = [new_left_boundary, new_right_boundary, 1, False]
 								print("totally wrong")
 						else:
 							assert (self.decide_direction(left_boundary, new_left_boundary) == -1)
@@ -716,7 +717,8 @@ class streaming(object):
 							if self.decide_direction(left_boundary, new_right_boundary == 1):
 								area = [new_left_boundary, left_boundary, -1, True]
 							else:
-								area = [new_left_boundary, new_right_boundary, -1, False]
+								# area = [new_left_boundary, new_right_boundary, -1, False]
+								area = [new_left_boundary, left_boundary, -1, False]
 								print("totally wrong")
 						# print("makeup area", area)
 						# print("-----------")

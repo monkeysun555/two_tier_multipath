@@ -20,9 +20,9 @@ KP = 0.6		# P controller
 KI = 0.01		# I controller
 PI_RANGE = 60
 MAX_VIDEO_VERSION = 3
-
+BITRATE_LEN = 4
 # Video parameters
-VIDEO_LEN = 600		# seconds
+VIDEO_LEN = 900		# seconds
 VIDEO_FPS = 30		# hz	
 NETWORK_TRACE_LEN = VIDEO_LEN 		# seconds
 VIEW_PRED_SAMPLE_LEN = 30	# samples used for prediction
@@ -35,63 +35,16 @@ BW_PRED = 2
 BW_PRED_SAMPLE_SIZE = 5
 
 VIEWPORT_TRACE_FILENAME = 'view_angle_combo_video1.mat'  ##video 1-4
-REGULAR_CHANNEL_TRACE = 'BW_Trace_4.mat'
-REGULAR_MULTIPLE = 50
-REGULAR_ADD = 10
-## version 1: 5G, only correct, no repair
-## version 2: 5G, correct and repair
-## version 3: 4G, only correct, no repair
+REGULAR_CHANNEL_TRACE = 'BW_Trace_5G_3.txt'
+REGULAR_MULTIPLE = 1
+REGULAR_ADD = 0
+## In this file, alwayes use 5G trace to do streaming, 
 ## Other versions: 4G, no correct, no repair
-STREAMING_VERSION = 2
-if STREAMING_VERSION == 1:
-	CELL = 1 ## 5G
-	NETWORK_TRACE_FILENAME = 'BW_Trace_5G_2.txt'
-	EXTRA_MULTIPLE = 1
-	EXTRA_ADD = 0
-	IS_CORRECT = 1
-	IS_REPAIR = 0
-	CORRECT_TIME_HEAD = 0.3
-	REPAIR_TIME_HEAD = 0.1    ## Useless
-	CORRECT_TIME_THRES = 0.1
-	REPAIR_TIME_THRES = 0.1
-
-elif STREAMING_VERSION == 2:
-	CELL = 1 ## 5G
-	NETWORK_TRACE_FILENAME = 'BW_Trace_5G_2.txt'
-	EXTRA_MULTIPLE = 1
-	EXTRA_ADD = 0	
-	IS_CORRECT = 1
-	IS_REPAIR = 1
-	CORRECT_TIME_HEAD = 0.1
-	REPAIR_TIME_HEAD = 0.5
-	CORRECT_TIME_THRES = 0.05
-	REPAIR_TIME_THRES = 0.1
-
-
-elif STREAMING_VERSION == 3:
-	CELL = 0 ## 4G
-	NETWORK_TRACE_FILENAME = 'BW_Trace_1.mat'
-	EXTRA_MULTIPLE = 100
-	EXTRA_ADD = 0
- 	IS_CORRECT = 1
-	IS_REPAIR = 0
-	CORRECT_TIME_HEAD = 0.9
-	REPAIR_TIME_HEAD = 0.1   ## Useless
-	CORRECT_TIME_THRES = 0.9
-	REPAIR_TIME_THRES = 0.5
-
-else:
-	CELL = 0 ## 4G
-	NETWORK_TRACE_FILENAME = 'BW_Trace_1.mat'
-	EXTRA_MULTIPLE = 100
-	EXTRA_ADD = 0
- 	IS_CORRECT = 0
-	IS_REPAIR = 0
-	CORRECT_TIME_HEAD = 0.1  ## Useless
-	REPAIR_TIME_HEAD = 0.1   ## Useless
-	CORRECT_TIME_THRES = 0.9
-	REPAIR_TIME_THRES = 0.5
-
+CORRECT_TIME_HEAD = 0.1  ## Useless
+CORRECT_TIME_THRES = 0.3
+IS_AGAIN = 1
+AGAIN_THRES = 0.7
+AGAIN_BL_THRES = 8
 
 
 ## RTT
@@ -133,6 +86,9 @@ class streaming(object):
 		self.request_pre = 0
 		self.is_empty_el = 0
 		self.addition_time = 0.0
+		self.addition_data = 0.0
+		self.addition_useful_data = 0.0
+		self.already_correct = False
 
 		self.EVR_BL_Recordset = []
 		self.EVR_EL_Recordset = []
@@ -163,15 +119,38 @@ class streaming(object):
 
 				self.bw_info = np.append(self.bw_info, [sniff_BW, self.video_download_timestamp])
 
-				self.video_version, self.video_segment_index = self.control(rate_cut, sniff_BW)
-				self.video_segment = video_trace[self.video_version][self.video_segment_index]
+				if not self.already_correct:
+					self.video_version, self.video_segment_index = self.control(rate_cut, sniff_BW, True)
+				else:
+					self.video_version, self.video_segment_index = self.control(rate_cut, sniff_BW, False)
+				print("Version:", self.video_version)
+				if IS_AGAIN:
+					if self.video_version >= 0:
+						self.video_segment = video_trace[self.video_version][self.video_segment_index]
+						print("No correction!")
+					else:
+						## Check whether next EL is existing
+						downlading = self.correct(yaw_trace, pitch_trace, rate_cut, network_trace)
+						if downlading:
+							print("Correction!!!!!!!!")
+							self.already_correct = True
+							continue
+						else:
+							self.video_version, self.video_segment_index = self.control(rate_cut, sniff_BW, False)
+							self.video_segment = video_trace[self.video_version][self.video_segment_index]
+				else:
+					self.video_segment = video_trace[self.video_version][self.video_segment_index]
+
+				print("Following no correction")
 				temp_index = self.video_segment_index
-				if self.video_version >= 1:
+				if self.video_version >= 1 or self.video_version == -1:
+					assert self.video_version != -1
 					self.yaw_predict_value, self.yaw_predict_value_quan = self.predict_yaw(yaw_trace, self.video_download_timestamp, self.video_segment_index)
 					self.pitch_predict_value, self.pitch_predict_value_quan = self.predict_pitch(pitch_trace, self.video_download_timestamp, self.video_segment_index)
 
 
 			previous_time, recording_EL = self.video_fetching(network_trace, rate_cut, yaw_trace, pitch_trace, network_trace_aux)
+			self.already_correct = False
 			# return
 			## SHOULD MODIFY
 			if not self.downloadedPartialVideo and self.video_version >= 1 and recording_EL:
@@ -192,14 +171,25 @@ class streaming(object):
 		print(self.GBUFFER_EL_EMPTY_COUNT)
 		print(self.GBUFFER_BL_EMPTY_COUNT)
 		print(self.addition_time)
+		print(self.addition_data)
+		print(self.addition_useful_data)
 		# print(len(self.EVR_BL_Recordset))	
 
-	def control(self, rate_cut, sniff_BW):
+	def control(self, rate_cut, sniff_BW, do_correction):
 		# print(self.buffer_size_BL)
 		# print(self.video_seg_index_BL)
 		# print(self.downloadedPartialVideo)
 		# if not self.downloadedPartialVideo:
 		current_video_version = -1
+		if IS_AGAIN and do_correction:
+			# if again is enabled, means going to do correction, set version to -1
+			if self.video_download_timestamp - np.floor(self.video_download_timestamp) >= AGAIN_THRES \
+			   and self.buffer_size_BL >= AGAIN_BL_THRES \
+			   and self.video_download_timestamp - np.floor(self.video_download_timestamp) < 1:
+			   video_segment_index = int(np.ceil(self.video_download_timestamp))
+			   print("Will do correction!")
+			   print("Current Time:", self.video_download_timestamp)
+			   return current_video_version, video_segment_index
 		video_segment_index = -1
 		if self.buffer_size_BL < Q_REF_BL and self.video_seg_index_BL < VIDEO_LEN :
 			current_video_version = 0
@@ -214,24 +204,23 @@ class streaming(object):
 				# print(self.buffer_size_history)
 				# for index in range(0, len(self.buffer_size_history)):
 				for index in range(1, min(PI_RANGE+1, len(self.buffer_size_history)+1)):
-					if not IS_REPAIR:
-						u_i +=  KI  * (self.buffer_size_history[-index][1] - Q_REF_EL)
-					else:
-						u_i +=  KI  * (self.buffer_size_history[-index][1] - Q_REF_EL)
-			
+					# if not IS_REPAIR:
+					# 	u_i +=  KI  * (self.buffer_size_history[-index][1] - Q_REF_EL)
+					# else:
+					u_i +=  KI  * (self.buffer_size_history[-index][1] - Q_REF_EL)
 			u = u_i + u_p
 			########################
-			if self.buffer_size_EL >= 1:
-				v = u + 1
-				delta_time = 1
-			else :
-				v = u + np.ceil(self.video_download_timestamp + (10.**-8)) - self.video_download_timestamp
-				delta_time = np.ceil(self.video_download_timestamp) - self.video_download_timestamp
-			R_hat = v * sniff_BW
+			# if self.buffer_size_EL >= 1:
+			# 	v = u + 1
+			# 	delta_time = 1
+			# else :
+			# 	v = u + np.ceil(self.video_download_timestamp + (10.**-8)) - self.video_download_timestamp
+			# 	delta_time = np.ceil(self.video_download_timestamp) - self.video_download_timestamp
+			# R_hat = v * sniff_BW
 			###############
-			# v = u + 1
-			# delta_time = self.buffer_size_EL
-			# R_hat = min(v, delta_time) * sniff_BW
+			v = u + 1
+			delta_time = self.buffer_size_EL
+			R_hat = min(v, delta_time) * sniff_BW
 			#########
 			# print(R_hat, sniff_BW, self.video_seg_index_EL)
 			if R_hat >= rate_cut[3] - rate_cut[0]:
@@ -268,6 +257,7 @@ class streaming(object):
 		# print("fetching el index", self.video_seg_index_EL)
 		# print("fetching version", self.video_version)
 		# print("current time", self.video_download_timestamp)
+		print(self.network_seg_index)
 		if network_trace[self.network_seg_index]*self.remaining_time >= self.video_segment:
 			if self.video_version == 0:
 				self.EVR_BL_Recordset.append([self.video_seg_index_BL, self.video_version, network_trace[self.network_seg_index]])
@@ -293,53 +283,53 @@ class streaming(object):
 					temprol_eff = 1 - min(1, max(self.video_download_timestamp - self.video_seg_index_EL, 0))
 					if self.video_seg_index_EL >= int(np.floor(self.video_download_timestamp)):
 						self.buffer_size_EL += 1
-						if not IS_REPAIR:
-							if self.video_seg_index_EL == int(np.floor(self.video_download_timestamp)):
-								# self.buffer_size_EL += (np.ceil(self.video_download_timestamp) - self.video_download_timestamp)
-								is_same_el_index = 1
-							# else:
-								# self.buffer_size_EL += 1
-							self.EVR_EL_Recordset.append([self.video_seg_index_EL, self.video_version, network_trace[self.network_seg_index], \
-								self.yaw_predict_value_quan*30-15, yaw_trace[self.video_seg_index_EL*VIDEO_FPS+VIDEO_FPS/2],\
-								self.pitch_predict_value_quan, pitch_trace[self.video_seg_index_EL*VIDEO_FPS+VIDEO_FPS/2],\
-								VP_SPAN_YAW, VP_SPAN_PITCH, temprol_eff, RETRAN_UTILI_INIT, 0])
-							recording_EL = 1
-						else:
-							if len(self.EVR_EL_Recordset) > 0:
-								if self.EVR_EL_Recordset[-1][0] < self.video_seg_index_EL:
-									# self.buffer_size_EL += 1
-									self.EVR_EL_Recordset.append([self.video_seg_index_EL, self.video_version, network_trace[self.network_seg_index], \
-										self.yaw_predict_value_quan*30-15, yaw_trace[self.video_seg_index_EL*VIDEO_FPS+VIDEO_FPS/2],\
-										self.pitch_predict_value_quan, pitch_trace[self.video_seg_index_EL*VIDEO_FPS+VIDEO_FPS/2],\
-										VP_SPAN_YAW, VP_SPAN_PITCH, temprol_eff, RETRAN_UTILI_INIT, 0])
-									recording_EL = 1
-									# print("Regular channel replace 5G chunk!!!!!!--1-1-1-1")
-									# print("Append:", self.video_seg_index_EL)
-								elif self.EVR_EL_Recordset[-1][0] == self.video_seg_index_EL:
-									if temprol_eff > self.EVR_EL_Recordset[-1][9]+0.2 and self.video_version == MAX_VIDEO_VERSION:
-										self.EVR_EL_Recordset[-1][3] = self.yaw_predict_value_quan*30-15
-										self.EVR_EL_Recordset[-1][5] = self.pitch_predict_value_quan
-										self.EVR_EL_Recordset[-1][9] = temprol_eff
-										# self.buffer_size_EL += 1
-										recording_EL = 1
-										# print("Regular channel replace 5G chunk!!!!!!---")
-										# print("update existing:", self.video_seg_index_EL)
-									else:
-										print("Arrive at same sec, but worse", self.video_seg_index_EL)
+						# if not IS_REPAIR:
+						if self.video_seg_index_EL == int(np.floor(self.video_download_timestamp)):
+							# self.buffer_size_EL += (np.ceil(self.video_download_timestamp) - self.video_download_timestamp)
+							is_same_el_index = 1
+						# else:
+							# self.buffer_size_EL += 1
+						self.EVR_EL_Recordset.append([self.video_seg_index_EL, self.video_version, network_trace[self.network_seg_index], \
+							self.yaw_predict_value_quan*30-15, yaw_trace[self.video_seg_index_EL*VIDEO_FPS+VIDEO_FPS/2],\
+							self.pitch_predict_value_quan, pitch_trace[self.video_seg_index_EL*VIDEO_FPS+VIDEO_FPS/2],\
+							VP_SPAN_YAW, VP_SPAN_PITCH, temprol_eff, RETRAN_UTILI_INIT, 0])
+						recording_EL = 1
+						# else:
+						# 	if len(self.EVR_EL_Recordset) > 0:
+						# 		if self.EVR_EL_Recordset[-1][0] < self.video_seg_index_EL:
+						# 			# self.buffer_size_EL += 1
+						# 			self.EVR_EL_Recordset.append([self.video_seg_index_EL, self.video_version, network_trace[self.network_seg_index], \
+						# 				self.yaw_predict_value_quan*30-15, yaw_trace[self.video_seg_index_EL*VIDEO_FPS+VIDEO_FPS/2],\
+						# 				self.pitch_predict_value_quan, pitch_trace[self.video_seg_index_EL*VIDEO_FPS+VIDEO_FPS/2],\
+						# 				VP_SPAN_YAW, VP_SPAN_PITCH, temprol_eff, RETRAN_UTILI_INIT, 0])
+						# 			recording_EL = 1
+						# 			# print("Regular channel replace 5G chunk!!!!!!--1-1-1-1")
+						# 			# print("Append:", self.video_seg_index_EL)
+						# 		elif self.EVR_EL_Recordset[-1][0] == self.video_seg_index_EL:
+						# 			if temprol_eff > self.EVR_EL_Recordset[-1][9]+0.2 and self.video_version == MAX_VIDEO_VERSION:
+						# 				self.EVR_EL_Recordset[-1][3] = self.yaw_predict_value_quan*30-15
+						# 				self.EVR_EL_Recordset[-1][5] = self.pitch_predict_value_quan
+						# 				self.EVR_EL_Recordset[-1][9] = temprol_eff
+						# 				# self.buffer_size_EL += 1
+						# 				recording_EL = 1
+						# 				# print("Regular channel replace 5G chunk!!!!!!---")
+						# 				# print("update existing:", self.video_seg_index_EL)
+						# 			else:
+						# 				print("Arrive at same sec, but worse", self.video_seg_index_EL)
 
-								else:
-									print("arrive too late", self.video_seg_index_EL)
-									print("Shell never been triggered")
-									assert(1==0)
-									is_same_el_index = -1
-								if self.video_seg_index_EL == int(np.floor(self.video_download_timestamp)):
-									is_same_el_index = 1
-							else:
-								self.EVR_EL_Recordset.append([self.video_seg_index_EL, self.video_version, network_trace[self.network_seg_index], \
-									self.yaw_predict_value_quan*30-15, yaw_trace[self.video_seg_index_EL*VIDEO_FPS+VIDEO_FPS/2],\
-									self.pitch_predict_value_quan, pitch_trace[self.video_seg_index_EL*VIDEO_FPS+VIDEO_FPS/2],\
-									VP_SPAN_YAW, VP_SPAN_PITCH, temprol_eff, RETRAN_UTILI_INIT, 0])
-								recording_EL = 1
+						# 		else:
+						# 			print("arrive too late", self.video_seg_index_EL)
+						# 			print("Shell never been triggered")
+						# 			assert(1==0)
+						# 			is_same_el_index = -1
+						# 		if self.video_seg_index_EL == int(np.floor(self.video_download_timestamp)):
+						# 			is_same_el_index = 1
+						# 	else:
+						# 		self.EVR_EL_Recordset.append([self.video_seg_index_EL, self.video_version, network_trace[self.network_seg_index], \
+						# 			self.yaw_predict_value_quan*30-15, yaw_trace[self.video_seg_index_EL*VIDEO_FPS+VIDEO_FPS/2],\
+						# 			self.pitch_predict_value_quan, pitch_trace[self.video_seg_index_EL*VIDEO_FPS+VIDEO_FPS/2],\
+						# 			VP_SPAN_YAW, VP_SPAN_PITCH, temprol_eff, RETRAN_UTILI_INIT, 0])
+						# 		recording_EL = 1
 
 					else:
 						is_same_el_index = -1
@@ -413,6 +403,7 @@ class streaming(object):
 			elif is_same_el_index == 1:
 				self.buffer_size_EL = max(0, self.buffer_size_EL - (self.video_download_timestamp - np.floor(temp_video_download_timestamp)))
 			else:
+				print("self buffer length:", self.buffer_size_EL)
 				assert(np.round(self.buffer_size_EL == 0))
 		else:
 			self.buffer_size_EL = max(0, self.buffer_size_EL - (self.video_download_timestamp - temp_video_download_timestamp))
@@ -429,113 +420,121 @@ class streaming(object):
 			if self.buffer_size_EL == 0:
 				self.GBUFFER_EL_EMPTY_COUNT += 1
 				# self.video_seg_index_EL = int(np.floor(self.video_download_timestamp))
-			self.buffer_size_history.append([self.buffer_size_BL, self.buffer_size_EL])
+			self.buffer_size_history.append([np.round(self.buffer_size_BL), np.round(self.buffer_size_EL)])
 			self.network_seg_index += 1
 
-			if self.retransmit_available(network_trace_aux) and IS_CORRECT:
-				self.correct(yaw_trace, pitch_trace, rate_cut, network_trace_aux)
+			# if self.retransmit_available(network_trace_aux) and IS_CORRECT:
+			# 	self.correct(yaw_trace, pitch_trace, rate_cut, network_trace_aux)
 
 		return temp_video_download_timestamp, recording_EL
 
 
 	## Check 5G availability
-	def retransmit_available(self, network_trace_aux):
+	# def retransmit_available(self, network_trace_aux):
 		
-		availability = network_trace_aux[int(np.floor(self.video_download_timestamp))]
-		if availability != 0:
-			return True
-		else:
-			return False
+	# 	availability = network_trace_aux[int(np.floor(self.video_download_timestamp))]
+	# 	if availability != 0:
+	# 		return True
+	# 	else:
+	# 		return False
 
-	def repair(self, correct_time, correct_index, yaw_trace, pitch_trace, rate_cut, network_trace_aux):
-		if self.correctness_using == 0 and correct_index < 600:	
-			# print("Repair:", correct_index)	
-			correct_time -= REPAIR_TIME_HEAD
-			new_yaw_predict_value, new_yaw_predict_value_quan = self.predict_yaw(yaw_trace, correct_time, correct_index)
-			new_pitch_predict_value, new_pitch_predict_value_quan = self.predict_pitch(pitch_trace, correct_time, correct_index)
-			## Retransmit the how chunk as previous 
+	# def repair(self, correct_time, correct_index, yaw_trace, pitch_trace, rate_cut, network_trace_aux):
+	# 	if self.correctness_using == 0 and correct_index < 600:	
+	# 		# print("Repair:", correct_index)	
+	# 		correct_time -= REPAIR_TIME_HEAD
+	# 		new_yaw_predict_value, new_yaw_predict_value_quan = self.predict_yaw(yaw_trace, correct_time, correct_index)
+	# 		new_pitch_predict_value, new_pitch_predict_value_quan = self.predict_pitch(pitch_trace, correct_time, correct_index)
+	# 		## Retransmit the how chunk as previous 
 
-			extra_segment = rate_cut[MAX_VIDEO_VERSION]-rate_cut[0]
-			downloading_5G = 0
-			new_temprol_eff = 0
-			## Start to retransmit
-			# retran_bandwidth = np.random.normal(RETRAN_BW_MEAN, RETRAN_BW_STAND)
-			retran_bandwidth_1 = network_trace_aux[correct_index-1]
-			retran_bandwidth_2 = network_trace_aux[correct_index]
-			self.correctness_using = 1
-			## Calculate transmitting time, shall be replaced by function with real trace
-			if extra_segment > retran_bandwidth_1*REPAIR_TIME_HEAD:
-				if retran_bandwidth_2 == 0:
-					print("5G Too bad")
-					self.correctness_using = 0
-					self.addition_time += REPAIR_TIME_HEAD
-					self.EVR_EL_Recordset.append([correct_index, MAX_VIDEO_VERSION, (retran_bandwidth_1+retran_bandwidth_2)/2, \
-						new_yaw_predict_value_quan*30-15, yaw_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
-						new_pitch_predict_value_quan, pitch_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
-						VP_SPAN_YAW, VP_SPAN_PITCH, 0, retran_bandwidth_1*REPAIR_TIME_HEAD, 1])
-					return					
-				downloading_5G = (extra_segment - retran_bandwidth_1*REPAIR_TIME_HEAD)/retran_bandwidth_2
-				if downloading_5G > REPAIR_TIME_THRES:
-					print("5G Too bad")
-					self.correctness_using = 0
-					self.addition_time += (REPAIR_TIME_THRES + REPAIR_TIME_HEAD)
-					self.EVR_EL_Recordset.append([correct_index, MAX_VIDEO_VERSION, (retran_bandwidth_1+retran_bandwidth_2)/2, \
-						new_yaw_predict_value_quan*30-15, yaw_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
-						new_pitch_predict_value_quan, pitch_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
-						VP_SPAN_YAW, VP_SPAN_PITCH, 0, retran_bandwidth_1*REPAIR_TIME_HEAD + retran_bandwidth_2*REPAIR_TIME_THRES, 1])
-					return
-				new_temprol_eff = min(1, 1 - downloading_5G)
-				self.addition_time += (downloading_5G + REPAIR_TIME_HEAD)
-			else:
-				new_temprol_eff = 1
-				self.addition_time += extra_segment/retran_bandwidth_1
-			if len(self.EVR_EL_Recordset) > 0:
-				assert self.EVR_EL_Recordset[-1][0] < correct_index
-			# self.buffer_size_EL += 1
+	# 		extra_segment = rate_cut[MAX_VIDEO_VERSION]-rate_cut[0]
+	# 		downloading_5G = 0
+	# 		new_temprol_eff = 0
+	# 		## Start to retransmit
+	# 		# retran_bandwidth = np.random.normal(RETRAN_BW_MEAN, RETRAN_BW_STAND)
+	# 		retran_bandwidth_1 = network_trace_aux[correct_index-1]
+	# 		retran_bandwidth_2 = network_trace_aux[correct_index]
+	# 		self.correctness_using = 1
+	# 		## Calculate transmitting time, shall be replaced by function with real trace
+	# 		if extra_segment > retran_bandwidth_1*REPAIR_TIME_HEAD:
+	# 			if retran_bandwidth_2 == 0:
+	# 				print("5G Too bad")
+	# 				self.correctness_using = 0
+	# 				return					
+	# 			downloading_5G = (extra_segment - retran_bandwidth_1*REPAIR_TIME_HEAD)/retran_bandwidth_2
+	# 			if downloading_5G > REPAIR_TIME_THRES:
+	# 				print("5G Too bad")
+	# 				self.correctness_using = 0
+	# 				self.addition_time += (REPAIR_TIME_THRES + REPAIR_TIME_HEAD)
+	# 				return
+	# 			new_temprol_eff = min(1, 1 - downloading_5G)
+	# 			self.addition_time += (downloading_5G + REPAIR_TIME_HEAD)
+	# 		else:
+	# 			new_temprol_eff = 1
+	# 			self.addition_time += extra_segment/retran_bandwidth_1
+	# 		if len(self.EVR_EL_Recordset) > 0:
+	# 			assert self.EVR_EL_Recordset[-1][0] < correct_index
+	# 		# self.buffer_size_EL += 1
 
-			self.EVR_EL_Recordset.append([correct_index, MAX_VIDEO_VERSION, (retran_bandwidth_1+retran_bandwidth_2)/2, \
-				new_yaw_predict_value_quan*30-15, yaw_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
-				new_pitch_predict_value_quan, pitch_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
-				VP_SPAN_YAW, VP_SPAN_PITCH, new_temprol_eff, extra_segment, 1])
-			# print("repair degree",new_yaw_predict_value_quan*30-15, yaw_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2])
-			# print("Effective time", new_temprol_eff)
+	# 		self.EVR_EL_Recordset.append([correct_index, MAX_VIDEO_VERSION, (retran_bandwidth_1+retran_bandwidth_2)/2, \
+	# 			new_yaw_predict_value_quan*30-15, yaw_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
+	# 			new_pitch_predict_value_quan, pitch_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
+	# 			VP_SPAN_YAW, VP_SPAN_PITCH, new_temprol_eff, extra_segment, 1])
+	# 		# print("repair degree",new_yaw_predict_value_quan*30-15, yaw_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2])
+	# 		# print("Effective time", new_temprol_eff)
 
-			self.record_info = np.append(self.record_info, \
-					[self.video_download_timestamp, self.buffer_size_BL, self.buffer_size_EL,
-					new_yaw_predict_value, yaw_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
-					new_pitch_predict_value, pitch_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2], correct_time])
-			self.correctness_using = 0
-		return
+	# 		self.record_info = np.append(self.record_info, \
+	# 				[self.video_download_timestamp, self.buffer_size_BL, self.buffer_size_EL,
+	# 				new_yaw_predict_value, yaw_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
+	# 				new_pitch_predict_value, pitch_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2], correct_time])
+	# 		self.correctness_using = 0
+	# 	return
 
 	## To use the second 5G high-speed low-latency connection to correct vp
 	def correct(self,yaw_trace, pitch_trace, rate_cut, network_trace_aux):
+		print("Enter correction")
 		if self.correctness_using == 0:
-			correct_time = np.floor(self.video_download_timestamp)
-			correct_index = int(np.floor(self.video_download_timestamp))
+			correct_time = self.video_download_timestamp
+			correct_index = self.video_segment_index
 			next_EL = []
+			el_now = 0
+
 			while self.correct_ptr < len(self.EVR_EL_Recordset) and self.EVR_EL_Recordset[self.correct_ptr][0] < correct_index :
 				self.correct_ptr += 1
 			if self.correct_ptr >= len(self.EVR_EL_Recordset):
-				if IS_REPAIR and correct_index < VIDEO_LEN:
-					# print("Repair:", correct_index)
-					# if len(self.EVR_EL_Recordset) > 0:
-					# 	print("last one",self.EVR_EL_Recordset[-1][0])
-					self.repair(correct_time, correct_index, yaw_trace, pitch_trace, rate_cut, network_trace_aux)
-				return
+				# if IS_REPAIR and correct_index < VIDEO_LEN:
+				# 	# print("Repair:", correct_index)
+				# 	# if len(self.EVR_EL_Recordset) > 0:
+				# 	# 	print("last one",self.EVR_EL_Recordset[-1][0])
+				# 	self.repair(correct_time, correct_index, yaw_trace, pitch_trace, rate_cut, network_trace_aux)
+				print("There is no next el video!")
+				return False
 			else:
-				correct_time -= CORRECT_TIME_HEAD
+				# correct_time -= CORRECT_TIME_HEAD
+				if len(self.EVR_EL_Recordset) > 1:
+					temp_index = self.EVR_EL_Recordset[self.correct_ptr-1][0]
+					if temp_index == correct_index -1:
+						el_now = 1
+				else:
+					el_now = 1
+				print("el_now value:", el_now)
+				if el_now == 0:
+					print(self.EVR_EL_Recordset[-3:])
+					print(temp_index, )
 				next_EL = self.EVR_EL_Recordset[self.correct_ptr]
 				assert (next_EL[9] == 1)
-				assert (next_EL[10] == 0)
+				if next_EL[10] > 0:
+					print("Will do second correction!!")
+					return False
 				# print(next_EL[0])
 				if next_EL[0] > correct_index:
 					# No need to correct
 					## Maybe special case, wrong!! Pay attention
 					print("Too far away, not yet.")
 					print("Must be handled!")
-					return
+					return False
 				elif next_EL[0] == correct_index:
-					# print("correct chunk:", correct_index)
+					print("correct chunk:", correct_index)
+					print("correct time:", correct_time)
 					direction_central = 0
 					new_yaw_predict_value, new_yaw_predict_value_quan = self.predict_yaw(yaw_trace, correct_time, next_EL[0])
 					new_pitch_predict_value, new_pitch_predict_value_quan = self.predict_pitch(pitch_trace, correct_time, next_EL[0])
@@ -555,8 +554,9 @@ class streaming(object):
 
 					distance = min(np.abs(central - new_yaw_predict_value), 360 - np.abs(central - new_yaw_predict_value))
 					if distance <= 15:
-						# print("overlap")
-						return 
+						print("overlap")
+						print("print buffer %f %f" % (self.buffer_size_BL, self.buffer_size_EL))
+						return False
 					else:
 						## Need to do correctness, has area blank
 						## Judge the direction between the existing VP and new predict VP
@@ -589,8 +589,8 @@ class streaming(object):
 
 						## Calculate size of data should be retransmitted
 						retran_data_size = (RETRAN_EXTRA*total_tiles/(VP_SPAN_YAW/TILE_SIZE))*(rate_cut[next_EL[1]]-rate_cut[0])
-						# print(retran_data_size)
-
+						print(retran_data_size)
+						print("Before buffer %f %f" % (self.buffer_size_BL, self.buffer_size_EL))
 						## Simulate 5G retransmisstion and correct
 						downloading_5G = 0
 						## Start to retransmit
@@ -604,19 +604,72 @@ class streaming(object):
 								self.correctness_using = 0
 								self.EVR_EL_Recordset[self.correct_ptr][10] = retran_bandwidth_1*CORRECT_TIME_HEAD
 								self.addition_time += CORRECT_TIME_HEAD
-								return
+								self.addition_data += retran_bandwidth_1*CORRECT_TIME_HEAD
+								self.video_download_timestamp = np.ceil(self.video_download_timestamp)
+								self.downloadedPartialVideo = 0
+								self.remaining_time = 1
+								self.buffer_size_BL = np.ceil(self.buffer_size_BL)
+								if el_now == 1:
+									self.buffer_size_EL = max(0.0, np.floor(self.buffer_size_EL))
+								self.video_seg_index_EL = max(self.video_seg_index_EL, int(np.round(self.video_download_timestamp)))
+								print("Second zero")
+								print("Return", self.video_download_timestamp)
+								self.buffer_size_history.append([np.round(self.buffer_size_BL), np.round(self.buffer_size_EL)])
+								self.network_seg_index += 1
+								return True
 							downloading_5G = (retran_data_size - retran_bandwidth_1*CORRECT_TIME_HEAD)/retran_bandwidth_2
 							if downloading_5G >= CORRECT_TIME_THRES:
 								self.EVR_EL_Recordset[self.correct_ptr][10] = retran_data_size*(CORRECT_TIME_THRES+CORRECT_TIME_HEAD)
 								self.correctness_using = 0
 								self.addition_time += (CORRECT_TIME_THRES + CORRECT_TIME_HEAD)
+								self.addition_data += (retran_bandwidth_1*CORRECT_TIME_HEAD + retran_bandwidth_2*CORRECT_TIME_THRES)
+								self.video_download_timestamp = np.ceil(self.video_download_timestamp) + CORRECT_TIME_THRES
+								self.downloadedPartialVideo = 0
+								self.remaining_time = 1 - CORRECT_TIME_THRES
+								self.buffer_size_BL = np.floor(self.buffer_size_BL) - CORRECT_TIME_THRES
+								if el_now == 1:
+									self.buffer_size_EL = max(0.0, np.floor(self.buffer_size_EL)-CORRECT_TIME_THRES)
+								else:
+									self.buffer_size_EL  = max(0.0, self.buffer_size_EL - CORRECT_TIME_THRES)
 								print("Second connection too bad!!!")
-								return
+								print("Download 5G:", downloading_5G)
+								print("Bandwidth:", retran_bandwidth_1, retran_bandwidth_2)
+								print(self.video_download_timestamp)
+								print(self.buffer_size_BL)
+								print(self.buffer_size_EL)
+								self.buffer_size_history.append([np.ceil(self.buffer_size_BL), np.ceil(self.buffer_size_EL)])
+								self.network_seg_index += 1
+								self.video_seg_index_EL = max(self.video_seg_index_EL, int(np.ceil(self.video_download_timestamp)))
+								return True
 							else:
+								new_temprol_eff = 1 - downloading_5G
 								self.addition_time += (downloading_5G + CORRECT_TIME_HEAD)
+								self.addition_data += retran_data_size
+								self.addition_useful_data += retran_data_size
+								self.video_download_timestamp = np.ceil(self.video_download_timestamp) + downloading_5G
+								self.buffer_size_BL = np.floor(self.buffer_size_BL)-downloading_5G
+								if el_now == 1:
+									self.buffer_size_EL = max(0.0, np.floor(self.buffer_size_EL)-downloading_5G)
+								else:
+									self.buffer_size_EL = max(0.0, self.buffer_size_EL - downloading_5G)
+								self.video_seg_index_EL = max(self.video_seg_index_EL, int(np.ceil(self.video_download_timestamp)))
+								self.buffer_size_history.append([np.round(self.buffer_size_BL), np.round(self.buffer_size_EL)])
+								self.network_seg_index += 1
 						else:
-							self.addition_time += retran_data_size/retran_bandwidth_1	
-						new_temprol_eff = 1 - downloading_5G
+							new_temprol_eff = 1
+							self.addition_time += (retran_data_size/retran_bandwidth_1)
+							self.addition_data += retran_data_size
+							self.addition_useful_data += retran_data_size
+							self.video_download_timestamp += retran_data_size/retran_bandwidth_1
+							self.buffer_size_BL -= retran_data_size/retran_bandwidth_1
+							if el_now == 1:
+								self.buffer_size_EL = max(0.0, self.buffer_size_EL - retran_data_size/retran_bandwidth_1)
+							self.video_seg_index_EL = max(self.video_seg_index_EL, int(np.ceil(self.video_download_timestamp)))
+							# self.buffer_size_history.append([self.buffer_size_BL, self.buffer_size_EL])
+							# self.network_seg_index += 1
+						print("after buffer %f %f" % (self.buffer_size_BL, self.buffer_size_EL))
+						print(self.video_download_timestamp)
+						print("will update!!!!!!!!!!!!!")
 						new_yaw_span = 0.0
 						new_central = 0.0
 						## If continueous
@@ -653,7 +706,7 @@ class streaming(object):
 			## 5G is being used
 			print("Correct function is not available right now.")
 
-		return 
+		return True
 
 
 	def decide_direction(self, degree_1, degree_2):
@@ -687,7 +740,7 @@ class streaming(object):
 		# print(area, total_tiles)
 		return first_tile, last_tile, total_tiles
 
-	def predict_yaw(self, yaw_trace, video_download_timestamp,video_segment_index):
+	def predict_yaw(self, yaw_trace, video_download_timestamp, video_segment_index):
 		# print(yaw_trace)
 		yaw_predict_value = 0
 		yaw_predict_value_quan = 0
@@ -768,22 +821,26 @@ class streaming(object):
 
 
 def main():
-	network_trace = loadNetworkTrace(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
+	# network_trace = loadNetworkTrace(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
+	network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
+	print("5G trace mean:", np.mean(network_trace))
+	print("5G trace peak:", np.max(network_trace))
+	print("5G race standard deviation:", np.std(network_trace))
 	# print(min(network_trace))
-	network_trace_aux = []
-	if CELL == 0: ## 4G trace
-		network_trace_aux = loadNetworkTrace(NETWORK_TRACE_FILENAME, EXTRA_MULTIPLE, EXTRA_ADD)
-	elif CELL == 1: ## 5G trace
-		network_trace_aux = load_5G.load_5G_Data(NETWORK_TRACE_FILENAME, EXTRA_MULTIPLE, EXTRA_ADD)
-	else:
-		print("Load BW trace error!!")
+	network_trace_aux = network_trace
+	# if CELL == 0: ## 4G trace
+	# 	network_trace_aux = loadNetworkTrace(NETWORK_TRACE_FILENAME, EXTRA_MULTIPLE, EXTRA_ADD)
+	# elif CELL == 1: ## 5G trace
+	# 	network_trace_aux = load_5G.load_5G_Data(NETWORK_TRACE_FILENAME, EXTRA_MULTIPLE, EXTRA_ADD)
+	# else:
+	# 	print("Load BW trace error!!")
 	# print(min(network_trace_aux))
 	yaw_trace, pitch_trace = loadViewportTrace()
 	network_pdf, pdf_bins, pdf_patches = plot_pdf(network_trace)
 	network_cdf, cdf_bins, cdf_patches = plot_cdf(network_trace)
-	extra_network_pdf, extra_pdf_bins, extra_pdf_patches = plot_pdf(network_trace_aux)
-	extra_network_cdf, extra_cdf_bins, extra_cdf_patches = plot_cdf(network_trace_aux)
-	rate_cut = rate_determine(network_cdf)
+	# extra_network_pdf, extra_pdf_bins, extra_pdf_patches = plot_pdf(network_trace_aux)
+	# extra_network_cdf, extra_cdf_bins, extra_cdf_patches = plot_cdf(network_trace_aux)
+	rate_cut = new_rate_determine(network_cdf)
 	video_trace = loadVideoTrace(rate_cut)
 	streaming_sim = streaming()
 	streaming_sim.run(network_trace, yaw_trace, pitch_trace, video_trace, rate_cut, network_trace_aux)
@@ -857,6 +914,25 @@ def rate_determine(network_cdf):
 		print('Rate0 = %f, Rate1 = %f, Rate2 = %f, Rate3 = %f' % (rate_cut[0],rate_cut[1],rate_cut[2],rate_cut[3]))
 	return rate_cut
 
+def new_rate_determine(network_cdf):
+	# cut_percent = [0.4, 0.6, 0.8]
+	# rate_cut = [10.0]
+	# cut_idx = 0
+	# for cum in network_cdf:
+	# 	if cum >= np.max(network_cdf) * cut_percent[cut_idx]:
+	# 		rate_cut.append(np.round(network_cdf.tolist().index(cum)))
+	# 		cut_idx += 1
+	# 		if cut_idx >= len(cut_percent): 
+	# 			break
+	rate_cut = [0.0]*BITRATE_LEN
+	rate_cut[0] = 60
+	rate_cut[1] = 400
+	rate_cut[2] = 500
+	rate_cut[3] = 600
+	if IS_DEBUGGING: 
+		print('Rate0 = %f, Rate1 = %f, Rate2 = %f, Rate3 = %f' % (rate_cut[0],rate_cut[1],rate_cut[2],rate_cut[3]))
+	return rate_cut
+
 def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut, yaw_trace, pitch_trace, network_trace, bw_info, buffer_size_history, network_trace_aux):
 	# print(len(record_info)/9)
 	# print(len(EVR_EL_Recordset))
@@ -893,21 +969,21 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut, yaw_trace
 	plt.ylabel('Degree', fontsize=15)
 	plt.tick_params(axis='both', which='major', labelsize=15)
 	plt.tick_params(axis='both', which='minor', labelsize=15)
-	plt.axis([0, 600, 0, 450])
+	plt.axis([0, VIDEO_LEN, 0, 450])
 
 	p = plt.figure(FIGURE_NUM)
 	FIGURE_NUM += 1
-	plt.plot(bw_result[1], bw_result[0],'b-',label='Predict Bandwidth')
+	# plt.plot(bw_result[1], bw_result[0],'b-',label='Predict Bandwidth')
 	plt.plot(range(1,VIDEO_LEN+1), network_trace,'r-',label='Real Bandwidth')
 	# plt.plot(range(1,VIDEO_LEN+1), network_trace_aux[:VIDEO_LEN],'r-',label='5G Bandwidth', linewidth = 1)
 	plt.legend(loc='upper right')
-	plt.title('Bandwidth Predict and Real Trace')
-	# plt.title('5G Bandwidth Trace')
+	# plt.title('Bandwidth Predict and Real Trace')
+	plt.title('5G Bandwidth Trace')
 	plt.xlabel('Second', fontsize=15)
 	plt.ylabel('Mbps', fontsize=15)
 	plt.tick_params(axis='both', which='major', labelsize=15)
 	plt.tick_params(axis='both', which='minor', labelsize=15)
-	plt.axis([0, 600, 0, max(network_trace)+50])
+	plt.axis([0, NETWORK_TRACE_LEN, 0, max(network_trace)+200])
 	# plt.axis([0, 600, 0, max(network_trace_aux)+50])
 
 
@@ -915,12 +991,14 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut, yaw_trace
 	receive_bitrate = [0.0]*VIDEO_LEN
 	extra_cost = [[0.0, 0]]*VIDEO_LEN
 	extra_repair = [[0.0, 0]]*VIDEO_LEN
+	el_coverage_ratio = 0.0
+
 	# print(EVR_BL_Recordset)
 	for i in range (0,BUFFER_BL_INIT):
 		display_bitrate[i] += (rate_cut[0]/6)
 		receive_bitrate[i] += (rate_cut[0]/6)
-	display_bitrate[0] += rate_cut[3]
-	receive_bitrate[0] += rate_cut[3]
+	display_bitrate[0] += (rate_cut[3]-rate_cut[0])
+	receive_bitrate[0] += (rate_cut[3]-rate_cut[0])
 	for i in range(0, len(EVR_BL_Recordset)):
 		display_bitrate[EVR_BL_Recordset[i][0]] += rate_cut[EVR_BL_Recordset[i][1]]/6
 		receive_bitrate[EVR_BL_Recordset[i][0]] += rate_cut[EVR_BL_Recordset[i][1]]/6
@@ -941,8 +1019,9 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut, yaw_trace
 			sum_eff /= (VIDEO_FPS - start_frame)
 		else:
 			sum_eff = 0
-		display_bitrate[EVR_EL_Recordset[i][0]] += EVR_EL_Recordset[i][9]*sum_eff*rate_cut[EVR_EL_Recordset[i][1]] ##+ (1-EVR_EL_Recordset[i][9])*rate_cut[0]/6
-		receive_bitrate[EVR_EL_Recordset[i][0]] += rate_cut[EVR_EL_Recordset[i][1]]
+		el_coverage_ratio += sum_eff
+		display_bitrate[EVR_EL_Recordset[i][0]] += EVR_EL_Recordset[i][9]*sum_eff*(rate_cut[EVR_EL_Recordset[i][1]]-rate_cut[0]) ##+ (1-EVR_EL_Recordset[i][9])*rate_cut[0]/6
+		receive_bitrate[EVR_EL_Recordset[i][0]] += (rate_cut[EVR_EL_Recordset[i][1]]-rate_cut[0])
 		if EVR_EL_Recordset[i][11] == 0:	
 			extra_cost[EVR_EL_Recordset[i][0]] = [EVR_EL_Recordset[i][10]/8, EVR_EL_Recordset[i][0]]
 			# extra_cost[EVR_EL_Recordset[i][0]][1] = EVR_EL_Recordset[i][0]
@@ -960,11 +1039,14 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut, yaw_trace
 	print("Total cost data: %f" % (total_correction))
 	print("Total repair data: %f" % (total_repair))
 	print("Total extra data: %f" % (total_repair+total_correction))
+	print("Average EL coverage ratio:", el_coverage_ratio/VIDEO_LEN)
+	print("Average Effective coverage ratio:", el_coverage_ratio/len(EVR_EL_Recordset))
 
 		# print (sum_eff, EVR_EL_Recordset[i][0])
 		# print(EVR_EL_Recordset[i][3]*30-15, EVR_EL_Recordset[i][3], EVR_EL_Recordset[i][5],EVR_EL_Recordset[i][9])
 	# return
 	print("Effective bitrate:", sum(display_bitrate))
+	print("Received bitrate:", sum(receive_bitrate))
 	g = plt.figure(FIGURE_NUM)
 	FIGURE_NUM += 1
 	plt.plot(range(1,VIDEO_LEN+1), display_bitrate, 'bo-', markersize = 3, markeredgewidth = 0.5, markeredgecolor = 'blue', linewidth = 0.75, label='Effective Video Bitrate')
@@ -975,9 +1057,9 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut, yaw_trace
 	plt.ylabel('Mbps',fontsize = 15)
 	plt.tick_params(axis='both', which='major', labelsize=15)
 	plt.tick_params(axis='both', which='minor', labelsize=15)
-	plt.axis([0, 600, 0, max(receive_bitrate)+20])
+	plt.axis([0, 600, 0, max(receive_bitrate) + 100])
 
-	if IS_CORRECT:
+	if IS_AGAIN:
 		q = plt.figure(FIGURE_NUM)
 		FIGURE_NUM += 1
 		plt.bar(extra_cost[1], extra_cost[0], color='red', label='Correction Data', edgecolor = "red")
@@ -999,7 +1081,7 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut, yaw_trace
 	g.show()
 	h.show()
 	p.show()
-	if IS_CORRECT:
+	if IS_AGAIN:
 		q.show()
 	if IS_SAVING:
 		f.savefig('Two_Tier_BT_&_ET_Buffer_Length.eps', format='eps', dpi=1000)

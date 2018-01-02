@@ -1,8 +1,9 @@
 import scipy.io as sio
 import numpy as np
 
-VIDEO_LEN = 600
-NETWORK_TRACE_LEN = VIDEO_LEN + 100 		# seconds
+VIDEO_LEN = 900
+NETWORK_TRACE_LEN = VIDEO_LEN 		# For 5G python
+# NETWORK_TRACE_LEN = VIDEO_LEN + 100 		# For two-tier multipath and vp only
 def load_5G_Data(fname, multiple, addition):
 	with open(fname) as f:
 		content = f.readlines()
