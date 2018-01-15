@@ -71,6 +71,10 @@ MAX_TILES = int(360.0/TILE_SIZE)
 # Directory
 
 ADAPTIVE_NUM = 2
+ADAPTIVE_BW_THRES = 20
+ADAPTVIE_VP_THRES = 20
+STD_AVE_COEF = 0.1
+
 
 class streaming(object):
 
@@ -102,6 +106,8 @@ class streaming(object):
 		self.adaptive_version = 0  # choose from 0-1, 
 		self.bl_ref = Q_REF_BL
 		self.el_ref = Q_REF_EL
+		self.vp_adaptive_record = []
+		self.bw_adaptive_record = []
 
 		self.EVR_BL_Recordset = []
 		self.EVR_EL_Recordset = []
@@ -123,23 +129,10 @@ class streaming(object):
 	def run(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut_bt, rate_cut_et, network_trace_aux):
 		while self.video_seg_index_BL < VIDEO_LEN or \
 			(self.video_seg_index_BL >= VIDEO_LEN and self.video_seg_index_EL < VIDEO_LEN):
+
+			rate_cut = self.adaptive_streaming(rate_cut_bt, rate_cut_et)
+			
 			if not self.downloadedPartialVideo:
-
-				if self.adaptive_version == 0:
-					rate_cut = [rate_cut_bt[0]] + rate_cut_et[0]
-					# bl_ref = Q_REF_BL
-					# el_ref = Q_REF_EL
-					print(rate_cut) 
-				elif self.adaptive_version == 1:
-					rate_cut = [rate_cut_bt[1]] + rate_cut_et[1]
-					# bl_ref = Q_REF_BL_ADAPTIVE
-					# el_ref = Q_REF_EL_ADAPTIVE
-					print(rate_cut)
-				else:
-					print("Wrong adaptive version!!")
-					assert (1==0)
-					continue
-
 				if BW_PRED == 1:
 					sniff_BW = self.getCurrentBW(network_trace)
 				elif BW_PRED == 2:
@@ -147,14 +140,16 @@ class streaming(object):
 
 				self.bw_info = np.append(self.bw_info, [sniff_BW, self.video_download_timestamp])
 
+				#####################################
+				## For 5G single path correction
 				if not self.already_correct:
 					self.video_version, self.video_segment_index = self.control(rate_cut, sniff_BW, True)
 				else:
 					self.video_version, self.video_segment_index = self.control(rate_cut, sniff_BW, False)
-				print("Version:", self.video_version)
+				# print("Version:", self.video_version)
 				if IS_AGAIN:
 					if self.video_version >= 0:
-						self.video_segment = video_trace[self.video_version][self.video_segment_index]
+						self.video_segment = video_trace[self.adaptive_version][self.video_version][self.video_segment_index]
 						print("No correction!")
 					else:
 						## Check whether next EL is existing
@@ -165,10 +160,12 @@ class streaming(object):
 							continue
 						else:
 							self.video_version, self.video_segment_index = self.control(rate_cut, sniff_BW, False)
-							self.video_segment = video_trace[self.video_version][self.video_segment_index]
+							self.video_segment = video_trace[self.adaptive_version][self.video_version][self.video_segment_index]
 				else:
-					self.video_segment = video_trace[self.video_version][self.video_segment_index]
+					self.video_segment = video_trace[self.adaptive_version][self.video_version][self.video_segment_index]
+				############################################
 
+				## Normal streaming (5G correction)
 				print("Following no correction")
 				temp_index = self.video_segment_index
 				if self.video_version >= 1 or self.video_version == -1:
@@ -202,6 +199,39 @@ class streaming(object):
 		print(self.addition_data)
 		print(self.addition_useful_data)
 		# print(len(self.EVR_BL_Recordset))	
+	def adaptive_streaming(self, rate_cut_bt, rate_cut_et):
+		## First of all, check bw and vp prediction condition
+		average_bw = 0.0
+		stand_bw = 0.0
+		average_vp_hitrate = 0.0
+		if len(self.bw_adaptive_record) <= ADAPTIVE_BW_THRES:
+			average_bw = np.mean(self.bw_adaptive_record)
+			stand_bw = np.std(self.bw_adaptive_record)
+		else:
+			average_bw = np.mean(self.bw_adaptive_record[-ADAPTIVE_BW_THRES:])
+			stand_bw = np.std(self.bw_adaptive_record[-ADAPTIVE_BW_THRES:])
+
+		print(average_bw, stand_bw)
+		if stand_bw > STD_AVE_COEF*average_bw:
+
+		else:
+
+		## For adaptive streaming
+		rate_cut = []
+		if self.adaptive_version == 0:
+			rate_cut = [rate_cut_bt[0]] + rate_cut_et[0]
+			# bl_ref = Q_REF_BL
+			# el_ref = Q_REF_EL
+			print(rate_cut) 
+		elif self.adaptive_version == 1:
+			rate_cut = [rate_cut_bt[1]] + rate_cut_et[1]
+			# bl_ref = Q_REF_BL_ADAPTIVE
+			# el_ref = Q_REF_EL_ADAPTIVE
+			print(rate_cut)
+		else:
+			print("Wrong adaptive version!!")
+			assert (1==0)
+		return rate_cut
 
 	def control(self, rate_cut, sniff_BW, do_correction):
 		# print(self.buffer_size_BL)
@@ -246,7 +276,7 @@ class streaming(object):
 		elif (self.buffer_size_BL >= self.bl_ref and self.video_seg_index_BL < VIDEO_LEN and self.video_seg_index_EL < VIDEO_LEN ) \
 			or (self.video_seg_index_BL >= VIDEO_LEN and self.video_seg_index_EL < VIDEO_LEN):
 			#PI control logic
-			u_p = KP * (self.buffer_size_EL - el_ref)
+			u_p = KP * (self.buffer_size_EL - self.el_ref)
 			u_i = 0
 			if len(self.buffer_size_history) != 0:
 				# print(self.buffer_size_history)
@@ -438,7 +468,7 @@ class streaming(object):
 		# 	else:
 		# 		self.GBUFFER_EL_EMPTY_COUNT += 1
 		# 		self.video_seg_index_EL += 1
-		# 	self.buffer_size_history.append([self.buffer_size_BL, self.buffer_size_EL])
+		# 	self.buffer_size_history.append([self.buffer_size_BL, self.buffer_size_EL, self.bl_ref, self.el_ref])
 		# 	self.network_seg_index += 1
 
 		##########################
@@ -468,12 +498,26 @@ class streaming(object):
 			if self.buffer_size_EL == 0:
 				self.GBUFFER_EL_EMPTY_COUNT += 1
 				# self.video_seg_index_EL = int(np.floor(self.video_download_timestamp))
-			self.buffer_size_history.append([np.round(self.buffer_size_BL), np.round(self.buffer_size_EL)])
+			self.buffer_size_history.append([np.round(self.buffer_size_BL), np.round(self.buffer_size_EL), self.bl_ref, self.el_ref])
 			self.network_seg_index += 1
 
 			# if self.retransmit_available(network_trace_aux) and IS_CORRECT:
 			# 	self.correct(yaw_trace, pitch_trace, rate_cut, network_trace_aux)
+			
+			## For adaptive streaming
+			temp_yaw_predict_value, temp_yaw_predict_value_quan = self.predict_yaw(yaw_trace, self.video_download_timestamp - self.el_ref, int(self.video_download_timestamp))
+			temp_pitch_predict_value, temp_pitch_predict_value_quan = self.predict_pitch(pitch_trace, self.video_download_timestamp - self.el_ref, int(self.video_download_timestamp))
+			
+			sum_eff = 0.0
+			for j in range(0, VIDEO_FPS):
+				yaw_distance = min(np.abs(yaw_trace[int(self.video_download_timestamp)*VIDEO_FPS+j] - temp_yaw_predict_value), \
+								360 - np.abs(yaw_trace[int(self.video_download_timestamp)*VIDEO_FPS+j] - temp_yaw_predict_value))
+				eff = min(1, max(0, (135 - yaw_distance)/120))
+				sum_eff += eff
+			sum_eff /= VIDEO_FPS
 
+			self.vp_adaptive_record.append([temp_yaw_predict_value, temp_pitch_predict_value, int(self.video_download_timestamp), sum_eff])
+			self.bw_adaptive_record.append(network_trace[int(self.video_download_timestamp)-1])
 		return temp_video_download_timestamp, recording_EL
 
 
@@ -660,12 +704,12 @@ class streaming(object):
 								self.video_seg_index_EL = max(self.video_seg_index_EL, int(np.round(self.video_download_timestamp)))
 								print("Second zero")
 								print("Return", self.video_download_timestamp)
-								self.buffer_size_history.append([np.round(self.buffer_size_BL), np.round(self.buffer_size_EL)])
+								self.buffer_size_history.append([np.round(self.buffer_size_BL), np.round(self.buffer_size_EL), self.bl_ref, self.el_ref])
 								self.network_seg_index += 1
 								return True
 							downloading_5G = (retran_data_size - retran_bandwidth_1*CORRECT_TIME_HEAD)/retran_bandwidth_2
 							if downloading_5G >= CORRECT_TIME_THRES:
-								self.EVR_EL_Recordset[self.correct_ptr][10] = retran_data_size*(CORRECT_TIME_THRES+CORRECT_TIME_HEAD)
+								self.EVR_EL_Recordset[self.correct_ptr][10] = (retran_bandwidth_1*CORRECT_TIME_HEAD + retran_bandwidth_2*CORRECT_TIME_THRES)
 								self.correctness_using = 0
 								self.addition_time += (CORRECT_TIME_THRES + CORRECT_TIME_HEAD)
 								self.addition_data += (retran_bandwidth_1*CORRECT_TIME_HEAD + retran_bandwidth_2*CORRECT_TIME_THRES)
@@ -683,7 +727,7 @@ class streaming(object):
 								print(self.video_download_timestamp)
 								print(self.buffer_size_BL)
 								print(self.buffer_size_EL)
-								self.buffer_size_history.append([np.ceil(self.buffer_size_BL), np.ceil(self.buffer_size_EL)])
+								self.buffer_size_history.append([np.ceil(self.buffer_size_BL), np.ceil(self.buffer_size_EL), self.bl_ref, self.el_ref])
 								self.network_seg_index += 1
 								self.video_seg_index_EL = max(self.video_seg_index_EL, int(np.ceil(self.video_download_timestamp)))
 								return True
@@ -699,7 +743,7 @@ class streaming(object):
 								else:
 									self.buffer_size_EL = max(0.0, self.buffer_size_EL - downloading_5G)
 								self.video_seg_index_EL = max(self.video_seg_index_EL, int(np.ceil(self.video_download_timestamp)))
-								self.buffer_size_history.append([np.round(self.buffer_size_BL), np.round(self.buffer_size_EL)])
+								self.buffer_size_history.append([np.round(self.buffer_size_BL), np.round(self.buffer_size_EL), self.bl_ref, self.el_ref])
 								self.network_seg_index += 1
 						else:
 							new_temprol_eff = 1
@@ -711,7 +755,7 @@ class streaming(object):
 							if el_now == 1:
 								self.buffer_size_EL = max(0.0, self.buffer_size_EL - retran_data_size/retran_bandwidth_1)
 							self.video_seg_index_EL = max(self.video_seg_index_EL, int(np.ceil(self.video_download_timestamp)))
-							# self.buffer_size_history.append([self.buffer_size_BL, self.buffer_size_EL])
+							# self.buffer_size_history.append([self.buffer_size_BL, self.buffer_size_EL, self.bl_ref, self.el_ref])
 							# self.network_seg_index += 1
 						print("after buffer %f %f" % (self.buffer_size_BL, self.buffer_size_EL))
 						print(self.video_download_timestamp)

@@ -22,7 +22,7 @@ PI_RANGE = 60
 MAX_VIDEO_VERSION = 3
 BITRATE_LEN = 4
 # Video parameters
-VIDEO_LEN = 900		# seconds
+VIDEO_LEN = 600		# seconds
 VIDEO_FPS = 30		# hz	
 NETWORK_TRACE_LEN = VIDEO_LEN 		# seconds
 VIEW_PRED_SAMPLE_LEN = 30	# samples used for prediction
@@ -32,18 +32,21 @@ FIGURE_NUM = 1
 #
 INIT_BW = 30
 BW_PRED = 2
-BW_PRED_SAMPLE_SIZE = 5
+BW_PRED_SAMPLE_SIZE = 10
 
 VIEWPORT_TRACE_FILENAME = 'view_angle_combo_video1.mat'  ##video 1-4
-REGULAR_CHANNEL_TRACE = 'BW_Trace_5G_3.txt'
+REGULAR_CHANNEL_TRACE = 'BW_Trace_5G_1.txt'
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
 ## In this file, alwayes use 5G trace to do streaming, 
 ## Other versions: 4G, no correct, no repair
 CORRECT_TIME_HEAD = 0.1  ## Useless
 CORRECT_TIME_THRES = 0.3
-IS_AGAIN = 1
-AGAIN_THRES = 0.7
+											 ##	
+#########################################   ##
+IS_AGAIN = 0						       ## ##################
+#########################################   ##
+AGAIN_THRES = 0.7   						 ##	
 AGAIN_BL_THRES = 8
 
 
@@ -63,7 +66,7 @@ COST_EFF = 10  		  ##
 USER_VP = 120.0
 VP_SPAN_YAW = 150.0
 VP_SPAN_PITCH = 180.0
-TILE_SIZE = 30.0
+TILE_SIZE = 15.0
 MAX_TILES = int(360.0/TILE_SIZE)
 # Directory
 
@@ -123,16 +126,16 @@ class streaming(object):
 					self.video_version, self.video_segment_index = self.control(rate_cut, sniff_BW, True)
 				else:
 					self.video_version, self.video_segment_index = self.control(rate_cut, sniff_BW, False)
-				print("Version:", self.video_version)
+				# print("Version:", self.video_version)
 				if IS_AGAIN:
 					if self.video_version >= 0:
 						self.video_segment = video_trace[self.video_version][self.video_segment_index]
-						print("No correction!")
+						# print("No correction!")
 					else:
 						## Check whether next EL is existing
 						downlading = self.correct(yaw_trace, pitch_trace, rate_cut, network_trace)
 						if downlading:
-							print("Correction!!!!!!!!")
+							# print("Correction!!!!!!!!")
 							self.already_correct = True
 							continue
 						else:
@@ -141,7 +144,7 @@ class streaming(object):
 				else:
 					self.video_segment = video_trace[self.video_version][self.video_segment_index]
 
-				print("Following no correction")
+				# print("Following no correction")
 				temp_index = self.video_segment_index
 				if self.video_version >= 1 or self.video_version == -1:
 					assert self.video_version != -1
@@ -257,7 +260,7 @@ class streaming(object):
 		# print("fetching el index", self.video_seg_index_EL)
 		# print("fetching version", self.video_version)
 		# print("current time", self.video_download_timestamp)
-		print(self.network_seg_index)
+		# print(self.network_seg_index)
 		if network_trace[self.network_seg_index]*self.remaining_time >= self.video_segment:
 			if self.video_version == 0:
 				self.EVR_BL_Recordset.append([self.video_seg_index_BL, self.video_version, network_trace[self.network_seg_index]])
@@ -403,7 +406,7 @@ class streaming(object):
 			elif is_same_el_index == 1:
 				self.buffer_size_EL = max(0, self.buffer_size_EL - (self.video_download_timestamp - np.floor(temp_video_download_timestamp)))
 			else:
-				print("self buffer length:", self.buffer_size_EL)
+				# print("self buffer length:", self.buffer_size_EL)
 				assert(np.round(self.buffer_size_EL == 0))
 		else:
 			self.buffer_size_EL = max(0, self.buffer_size_EL - (self.video_download_timestamp - temp_video_download_timestamp))
@@ -619,7 +622,7 @@ class streaming(object):
 								return True
 							downloading_5G = (retran_data_size - retran_bandwidth_1*CORRECT_TIME_HEAD)/retran_bandwidth_2
 							if downloading_5G >= CORRECT_TIME_THRES:
-								self.EVR_EL_Recordset[self.correct_ptr][10] = retran_data_size*(CORRECT_TIME_THRES+CORRECT_TIME_HEAD)
+								self.EVR_EL_Recordset[self.correct_ptr][10] = (retran_bandwidth_1*CORRECT_TIME_HEAD + retran_bandwidth_2*CORRECT_TIME_THRES)
 								self.correctness_using = 0
 								self.addition_time += (CORRECT_TIME_THRES + CORRECT_TIME_HEAD)
 								self.addition_data += (retran_bandwidth_1*CORRECT_TIME_HEAD + retran_bandwidth_2*CORRECT_TIME_THRES)
@@ -687,8 +690,11 @@ class streaming(object):
 							##udpate EL recordest
 							self.EVR_EL_Recordset[self.correct_ptr][3] = new_central
 							self.EVR_EL_Recordset[self.correct_ptr][7] = new_yaw_span
-							if distance >= 60.0 and new_temprol_eff <= 0.1:
-								self.EVR_EL_Recordset[self.correct_ptr][9] = new_temprol_eff
+							#######
+							# if distance >= 60.0 and new_temprol_eff <= 0.1:
+							# if new_temprol_eff <= 0.1:
+							# 	self.EVR_EL_Recordset[self.correct_ptr][9] = new_temprol_eff
+							#######
 							self.EVR_EL_Recordset[self.correct_ptr][10] = retran_data_size
 							self.correctness_using = 0
 							print("Update EL", new_central, new_yaw_span, new_temprol_eff, retran_data_size, self.EVR_EL_Recordset[self.correct_ptr][10])
@@ -840,7 +846,8 @@ def main():
 	network_cdf, cdf_bins, cdf_patches = plot_cdf(network_trace)
 	# extra_network_pdf, extra_pdf_bins, extra_pdf_patches = plot_pdf(network_trace_aux)
 	# extra_network_cdf, extra_cdf_bins, extra_cdf_patches = plot_cdf(network_trace_aux)
-	rate_cut = new_rate_determine(network_cdf)
+	# rate_cut = new_rate_determine(network_cdf)
+	rate_cut = rate_determine(network_cdf)
 	video_trace = loadVideoTrace(rate_cut)
 	streaming_sim = streaming()
 	streaming_sim.run(network_trace, yaw_trace, pitch_trace, video_trace, rate_cut, network_trace_aux)
@@ -883,11 +890,12 @@ def plot_pdf(trace):
 	f = plt.figure(FIGURE_NUM)
 	FIGURE_NUM += 1
 	n, bins, patches = plt.hist(trace, range(0, int(np.ceil(max(trace))) + 1), normed = 1, label='PDF', color='b')
-	plt.title('Bandwidth Distribution')
+	plt.title('5G_Trace_1 Bandwidth PDF')
 	plt.xlabel('Mbps', fontsize=15)
 	# plt.ylabel('', fontsize=15)
 	plt.tick_params(axis='both', which='major', labelsize=15)
 	# plt.tick_params(axis='both', which='minor', labelsize=15)
+	plt.axis([0, max(trace), 0, max(n)])
 	if IS_DEBUGGING: f.show()
 	return n, bins, patches
 
@@ -896,13 +904,22 @@ def plot_cdf(trace):
 	f = plt.figure(FIGURE_NUM)
 	FIGURE_NUM +=1
 	n, bins, patches = plt.hist(trace, range(0,int(np.ceil(max(trace))) + 1), normed = 1, cumulative=True, label='CDF', histtype='stepfilled', color='b')
+	plt.title('5G_Trace_1 Bandwidth CDF')
+	plt.xlabel('Mbps', fontsize=15)
+	plt.tick_params(axis='both', which='major', labelsize=15)
+	plt.axis([0, max(trace), 0, 1.2])
 	# print(a,b,c)
 	if IS_DEBUGGING: f.show()
 	return n, bins, patches
 
 def rate_determine(network_cdf):
-	cut_percent = [0.4, 0.6, 0.8]
-	rate_cut = [10.0]
+	# cut_percent = [0.2, 0.5, 0.8]
+	# rate_cut = [10.0]
+	
+
+	cut_percent = [0.2, 0.4, 0.6, 0.8]
+	rate_cut = []
+
 	cut_idx = 0
 	for cum in network_cdf:
 		if cum >= np.max(network_cdf) * cut_percent[cut_idx]:
@@ -926,9 +943,9 @@ def new_rate_determine(network_cdf):
 	# 			break
 	rate_cut = [0.0]*BITRATE_LEN
 	rate_cut[0] = 60
-	rate_cut[1] = 400
-	rate_cut[2] = 500
-	rate_cut[3] = 600
+	rate_cut[1] = 300
+	rate_cut[2] = 350
+	rate_cut[3] = 400
 	if IS_DEBUGGING: 
 		print('Rate0 = %f, Rate1 = %f, Rate2 = %f, Rate3 = %f' % (rate_cut[0],rate_cut[1],rate_cut[2],rate_cut[3]))
 	return rate_cut
@@ -975,6 +992,9 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut, yaw_trace
 	FIGURE_NUM += 1
 	# plt.plot(bw_result[1], bw_result[0],'b-',label='Predict Bandwidth')
 	plt.plot(range(1,VIDEO_LEN+1), network_trace,'r-',label='Real Bandwidth')
+	### for plot gamma
+	# plt.plot(range(1,VIDEO_LEN+1), network_trace,'r-',label='Average:690.7 Mbps  Peak: 885.07 Mbps  std:211.1')
+	######
 	# plt.plot(range(1,VIDEO_LEN+1), network_trace_aux[:VIDEO_LEN],'r-',label='5G Bandwidth', linewidth = 1)
 	plt.legend(loc='upper right')
 	# plt.title('Bandwidth Predict and Real Trace')
@@ -1004,6 +1024,7 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut, yaw_trace
 		receive_bitrate[EVR_BL_Recordset[i][0]] += rate_cut[EVR_BL_Recordset[i][1]]/6
 	total_correction = 0.0
 	total_repair = 0.0
+	total_gamma = 0.0
 	# print(EVR_EL_Recordset)
 	for i in range(0,len(EVR_EL_Recordset)):
 		if EVR_EL_Recordset[i][9] != 0:
@@ -1020,6 +1041,7 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut, yaw_trace
 		else:
 			sum_eff = 0
 		el_coverage_ratio += sum_eff
+		total_gamma += EVR_EL_Recordset[i][9]
 		display_bitrate[EVR_EL_Recordset[i][0]] += EVR_EL_Recordset[i][9]*sum_eff*(rate_cut[EVR_EL_Recordset[i][1]]-rate_cut[0]) ##+ (1-EVR_EL_Recordset[i][9])*rate_cut[0]/6
 		receive_bitrate[EVR_EL_Recordset[i][0]] += (rate_cut[EVR_EL_Recordset[i][1]]-rate_cut[0])
 		if EVR_EL_Recordset[i][11] == 0:	
@@ -1041,12 +1063,17 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut, yaw_trace
 	print("Total extra data: %f" % (total_repair+total_correction))
 	print("Average EL coverage ratio:", el_coverage_ratio/VIDEO_LEN)
 	print("Average Effective coverage ratio:", el_coverage_ratio/len(EVR_EL_Recordset))
+	print("EL existing ratio:", float(len(EVR_EL_Recordset))/VIDEO_LEN)
 
 		# print (sum_eff, EVR_EL_Recordset[i][0])
 		# print(EVR_EL_Recordset[i][3]*30-15, EVR_EL_Recordset[i][3], EVR_EL_Recordset[i][5],EVR_EL_Recordset[i][9])
 	# return
 	print("Effective bitrate:", sum(display_bitrate))
 	print("Received bitrate:", sum(receive_bitrate))
+	print("Gamma value:", total_gamma/VIDEO_LEN )
+
+
+
 	g = plt.figure(FIGURE_NUM)
 	FIGURE_NUM += 1
 	plt.plot(range(1,VIDEO_LEN+1), display_bitrate, 'bo-', markersize = 3, markeredgewidth = 0.5, markeredgecolor = 'blue', linewidth = 0.75, label='Effective Video Bitrate')

@@ -42,11 +42,11 @@ REGULAR_ADD = 10
 ## version 2: 5G, correct and repair
 ## version 3: 4G, only correct, no repair
 ## Other versions: 4G, no correct, no repair
-STREAMING_VERSION = 2
+STREAMING_VERSION = 1
 if STREAMING_VERSION == 1:
 	CELL = 1 ## 5G
 	NETWORK_TRACE_FILENAME = 'BW_Trace_5G_2.txt'
-	EXTRA_MULTIPLE = 1
+	EXTRA_MULTIPLE = 1.0
 	EXTRA_ADD = 0
 	IS_CORRECT = 1
 	IS_REPAIR = 0
@@ -58,7 +58,7 @@ if STREAMING_VERSION == 1:
 elif STREAMING_VERSION == 2:
 	CELL = 1 ## 5G
 	NETWORK_TRACE_FILENAME = 'BW_Trace_5G_2.txt'
-	EXTRA_MULTIPLE = 1
+	EXTRA_MULTIPLE = 1.0
 	EXTRA_ADD = 0	
 	IS_CORRECT = 1
 	IS_REPAIR = 1
@@ -71,7 +71,7 @@ elif STREAMING_VERSION == 2:
 elif STREAMING_VERSION == 3:
 	CELL = 0 ## 4G
 	NETWORK_TRACE_FILENAME = 'BW_Trace_1.mat'
-	EXTRA_MULTIPLE = 100
+	EXTRA_MULTIPLE = 100.0
 	EXTRA_ADD = 0
  	IS_CORRECT = 1
 	IS_REPAIR = 0
@@ -83,7 +83,7 @@ elif STREAMING_VERSION == 3:
 else:
 	CELL = 0 ## 4G
 	NETWORK_TRACE_FILENAME = 'BW_Trace_1.mat'
-	EXTRA_MULTIPLE = 100
+	EXTRA_MULTIPLE = 100.0
 	EXTRA_ADD = 0
  	IS_CORRECT = 0
 	IS_REPAIR = 0
@@ -133,6 +133,7 @@ class streaming(object):
 		self.request_pre = 0
 		self.is_empty_el = 0
 		self.addition_time = 0.0
+		self.addition_data = 0.0
 
 		self.EVR_BL_Recordset = []
 		self.EVR_EL_Recordset = []
@@ -192,6 +193,7 @@ class streaming(object):
 		print(self.GBUFFER_EL_EMPTY_COUNT)
 		print(self.GBUFFER_BL_EMPTY_COUNT)
 		print(self.addition_time)
+		print(self.addition_data)
 		# print(len(self.EVR_BL_Recordset))	
 
 	def control(self, rate_cut, sniff_BW):
@@ -441,7 +443,8 @@ class streaming(object):
 	## Check 5G availability
 	def retransmit_available(self, network_trace_aux):
 		
-		availability = network_trace_aux[int(np.floor(self.video_download_timestamp))]
+		availability = network_trace_aux[int(np.floor(self.video_download_timestamp))-1]
+		# availability_1 = network_trace_aux[int(np.floor(self.video_download_timestamp))-1]
 		if availability != 0:
 			return True
 		else:
@@ -469,6 +472,7 @@ class streaming(object):
 					print("5G Too bad")
 					self.correctness_using = 0
 					self.addition_time += REPAIR_TIME_HEAD
+					self.addition_data += retran_bandwidth_1*REPAIR_TIME_HEAD
 					self.EVR_EL_Recordset.append([correct_index, MAX_VIDEO_VERSION, (retran_bandwidth_1+retran_bandwidth_2)/2, \
 						new_yaw_predict_value_quan*30-15, yaw_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
 						new_pitch_predict_value_quan, pitch_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
@@ -479,6 +483,7 @@ class streaming(object):
 					print("5G Too bad")
 					self.correctness_using = 0
 					self.addition_time += (REPAIR_TIME_THRES + REPAIR_TIME_HEAD)
+					self.addition_data += (retran_bandwidth_1*REPAIR_TIME_HEAD + retran_bandwidth_2*REPAIR_TIME_THRES)
 					self.EVR_EL_Recordset.append([correct_index, MAX_VIDEO_VERSION, (retran_bandwidth_1+retran_bandwidth_2)/2, \
 						new_yaw_predict_value_quan*30-15, yaw_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
 						new_pitch_predict_value_quan, pitch_trace[correct_index*VIDEO_FPS+VIDEO_FPS/2],\
@@ -489,6 +494,7 @@ class streaming(object):
 			else:
 				new_temprol_eff = 1
 				self.addition_time += extra_segment/retran_bandwidth_1
+			self.addition_data += extra_segment
 			if len(self.EVR_EL_Recordset) > 0:
 				assert self.EVR_EL_Recordset[-1][0] < correct_index
 			# self.buffer_size_EL += 1
@@ -592,30 +598,37 @@ class streaming(object):
 						# print(retran_data_size)
 
 						## Simulate 5G retransmisstion and correct
-						downloading_5G = 0
+						downloading_5G = 0.0
 						## Start to retransmit
 						retran_bandwidth_1 = network_trace_aux[correct_index-1]
 						retran_bandwidth_2 = network_trace_aux[correct_index]
+						print(retran_bandwidth_1, retran_bandwidth_2)
+						print(self.addition_time, self.addition_data)
 						self.correctness_using = 1
 						## Calculate transmitting time, shall be replaced by function with real trace
-						
+						assert retran_bandwidth_1 != 0
 						if retran_data_size > retran_bandwidth_1*CORRECT_TIME_HEAD:
 							if retran_bandwidth_2 == 0:
 								self.correctness_using = 0
-								self.EVR_EL_Recordset[self.correct_ptr][10] = retran_bandwidth_1*CORRECT_TIME_HEAD
+								self.EVR_EL_Recordset[self.correct_ptr][10] += retran_bandwidth_1*CORRECT_TIME_HEAD
 								self.addition_time += CORRECT_TIME_HEAD
-								return
-							downloading_5G = (retran_data_size - retran_bandwidth_1*CORRECT_TIME_HEAD)/retran_bandwidth_2
-							if downloading_5G >= CORRECT_TIME_THRES:
-								self.EVR_EL_Recordset[self.correct_ptr][10] = retran_data_size*(CORRECT_TIME_THRES+CORRECT_TIME_HEAD)
-								self.correctness_using = 0
-								self.addition_time += (CORRECT_TIME_THRES + CORRECT_TIME_HEAD)
-								print("Second connection too bad!!!")
+								self.addition_data += (CORRECT_TIME_HEAD*retran_bandwidth_1)
 								return
 							else:
-								self.addition_time += (downloading_5G + CORRECT_TIME_HEAD)
+								downloading_5G = (retran_data_size - retran_bandwidth_1*CORRECT_TIME_HEAD)/retran_bandwidth_2
+								if downloading_5G >= CORRECT_TIME_THRES:
+									self.EVR_EL_Recordset[self.correct_ptr][10] += (retran_bandwidth_2*CORRECT_TIME_THRES + retran_bandwidth_1*CORRECT_TIME_HEAD)
+									self.correctness_using = 0
+									self.addition_time += (CORRECT_TIME_THRES + CORRECT_TIME_HEAD)
+									self.addition_data += (retran_bandwidth_2*CORRECT_TIME_THRES+ retran_bandwidth_1*CORRECT_TIME_HEAD)
+									print("Second connection too bad!!!")
+									return
+								else:
+									self.addition_time += (downloading_5G + CORRECT_TIME_HEAD)
+									self.addition_data += retran_data_size
 						else:
-							self.addition_time += retran_data_size/retran_bandwidth_1	
+							self.addition_time += (float(retran_data_size)/retran_bandwidth_1)
+							self.addition_data += retran_data_size
 						new_temprol_eff = 1 - downloading_5G
 						new_yaw_span = 0.0
 						new_central = 0.0
@@ -636,12 +649,13 @@ class streaming(object):
 							self.EVR_EL_Recordset[self.correct_ptr][7] = new_yaw_span
 							if distance >= 60.0 and new_temprol_eff <= 0.1:
 								self.EVR_EL_Recordset[self.correct_ptr][9] = new_temprol_eff
-							self.EVR_EL_Recordset[self.correct_ptr][10] = retran_data_size
+							self.EVR_EL_Recordset[self.correct_ptr][10] += retran_data_size
 							self.correctness_using = 0
-							print("Update EL", new_central, new_yaw_span, new_temprol_eff, retran_data_size, self.EVR_EL_Recordset[self.correct_ptr][10])
-							print("area:", distance, area)
+							# print("Update EL", new_central, new_yaw_span, new_temprol_eff, retran_data_size, self.EVR_EL_Recordset[self.correct_ptr][10])
+							# print("area:", distance, area)
 						else:
 							## Liyang, should modify to update EL recordest
+							self.EVR_EL_Recordset[self.correct_ptr][10] += retran_data_size
 							return
 							## 5G is not usable
 						# print("Could correct!")
