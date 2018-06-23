@@ -395,7 +395,8 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut):
 
 	display_result = record_info.reshape(len(record_info)/9, 9).T
 	f = plt.figure(3)
-	plt.plot(display_result[0], display_result[1],'r-', display_result[0], display_result[2],'b-', display_result[0], display_result[3],'g-',display_result[0], display_result[4],'k-',)
+	plt.plot(display_result[0], display_result[1],'r-', display_result[0], display_result[2],'b-',\
+			display_result[0], display_result[3],'g-',display_result[0], display_result[4],'k-',)
 	g = plt.figure(4)
 	plt.plot(display_result[0], display_result[5],'r-', display_result[0], display_result[6],'b-')
 	h = plt.figure(5)
@@ -405,10 +406,10 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut):
 	display_bitrate = [0]*VIDEO_LEN
 	# print(EVR_BL_Recordset)
 	for i in range (0,BUFFER_BL_INIT):
-		display_bitrate[i] += rate_cut[0]
+		display_bitrate[i] += 5.0*rate_cut[0]/12.0
 	display_bitrate[0] += rate_cut[3]
 	for i in range(0, len(EVR_BL_Recordset)):
-		display_bitrate[EVR_BL_Recordset[i][0]] += rate_cut[EVR_BL_Recordset[i][1]]
+		display_bitrate[EVR_BL_Recordset[i][0]] += 5.0*rate_cut[EVR_BL_Recordset[i][1]]/12.0
 	for i in range(0,len(EVR_EL_Recordset)):
 		display_bitrate[EVR_EL_Recordset[i][0]] += rate_cut[EVR_EL_Recordset[i][1]]
 	

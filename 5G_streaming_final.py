@@ -91,6 +91,7 @@ COST_EFF = 10  		  ##
 
 USER_VP = 120.0
 VP_SPAN_YAW = 150.0
+VP_SPAN_RATIO = 4.0/5.0
 VP_SPAN_PITCH = 180.0
 TILE_SIZE = 15.0
 
@@ -1586,17 +1587,17 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut, yaw_trace
 
 	# print(EVR_BL_Recordset)
 	for i in range (0,BUFFER_BL_INIT):
-		display_bitrate[i] += (rate_cut[0]/6)
-		receive_bitrate[i] += (rate_cut[0]/6)
+		display_bitrate[i] += (5.0*rate_cut[0]/12.0)
+		receive_bitrate[i] += (5.0*rate_cut[0]/12.0)
 	# display_bitrate[0] += (rate_cut[3]-rate_cut[0]/6)
 	# receive_bitrate[0] += (rate_cut[3]-rate_cut[0]/6)
-	display_bitrate[0] += rate_cut[3]
-	receive_bitrate[0] += rate_cut[3]
+	display_bitrate[0] += rate_cut[3] * VP_SPAN_RATIO
+	receive_bitrate[0] += rate_cut[3] * VP_SPAN_RATIO
 	
 	# log_bitrate[0] += math.log10((rate_cut[3]-rate_cut[0])/r_base)
 	for i in range(0, len(EVR_BL_Recordset)):
-		display_bitrate[EVR_BL_Recordset[i][0]] += rate_cut[EVR_BL_Recordset[i][1]]/6
-		receive_bitrate[EVR_BL_Recordset[i][0]] += rate_cut[EVR_BL_Recordset[i][1]]/6
+		display_bitrate[EVR_BL_Recordset[i][0]] += 5.0*rate_cut[EVR_BL_Recordset[i][1]]/12.0
+		receive_bitrate[EVR_BL_Recordset[i][0]] += 5.0*rate_cut[EVR_BL_Recordset[i][1]]/12.0
 	total_correction = 0.0
 	total_repair = 0.0
 	total_gamma = 0.0
@@ -1617,8 +1618,8 @@ def display(record_info, EVR_BL_Recordset, EVR_EL_Recordset, rate_cut, yaw_trace
 			sum_eff = 0
 		el_coverage_ratio += sum_eff
 		total_gamma += EVR_EL_Recordset[i][9]
-		display_bitrate[EVR_EL_Recordset[i][0]] += EVR_EL_Recordset[i][9]*sum_eff*rate_cut[EVR_EL_Recordset[i][1]]    ##  -rate_cut[0]/6) ##+ (1-EVR_EL_Recordset[i][9])*rate_cut[0]/6
-		receive_bitrate[EVR_EL_Recordset[i][0]] += rate_cut[EVR_EL_Recordset[i][1]]  ##    -rate_cut[0]/6)
+		display_bitrate[EVR_EL_Recordset[i][0]] += EVR_EL_Recordset[i][9]*sum_eff*rate_cut[EVR_EL_Recordset[i][1]] * VP_SPAN_RATIO    ##  -rate_cut[0]/6) ##+ (1-EVR_EL_Recordset[i][9])*rate_cut[0]/6
+		receive_bitrate[EVR_EL_Recordset[i][0]] += rate_cut[EVR_EL_Recordset[i][1]] * VP_SPAN_RATIO  ##    -rate_cut[0]/6)
 		# if (EVR_EL_Recordset[i][9]*sum_eff*(rate_cut[EVR_EL_Recordset[i][1]]-rate_cut[0]/6)) != 0:
 		# 	log_bitrate[EVR_EL_Recordset[i][0]] += math.log10((EVR_EL_Recordset[i][9]*sum_eff*(rate_cut[EVR_EL_Recordset[i][1]]-rate_cut[0]/6))/r_base)
 

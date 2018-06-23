@@ -48,6 +48,7 @@ COST_EFF = 10  		  ##
 
 USER_VP = 120.0
 VP_SPAN_YAW = 150.0
+VP_SPAN_RATIO = 4.0/5.0
 VP_SPAN_PITCH = 180.0
 TILE_SIZE = 22.5
 MAX_TILES = int(360.0/TILE_SIZE)
@@ -1019,10 +1020,10 @@ def display(record_info, EVR_EL_Recordset, rate_cut, yaw_trace, pitch_trace, net
 	extra_freezing = [0.0]*VIDEO_LEN
 	# print(EVR_BL_Recordset)
 	# for i in range (0,BUFFER_BL_INIT):
-	# 	display_bitrate[i] += rate_cut[0]/6
-	# 	receive_bitrate[i] += rate_cut[0]/6
-	display_bitrate[0] += rate_cut[2]
-	receive_bitrate[0] += rate_cut[2]
+	# 	display_bitrate[i] += 5.0*rate_cut[0]/12.0
+	# 	receive_bitrate[i] += 5.0*rate_cut[0]/12.0
+	display_bitrate[0] += rate_cut[2] * VP_SPAN_RATIO
+	receive_bitrate[0] += rate_cut[2] * VP_SPAN_RATIO
 	# for i in range(0, len(EVR_BL_Recordset)):
 	# 	display_bitrate[EVR_BL_Recordset[i][0]] += rate_cut[EVR_BL_Recordset[i][1]]
 	# 	receive_bitrate[EVR_BL_Recordset[i][0]] += rate_cut[EVR_BL_Recordset[i][1]]
@@ -1040,8 +1041,8 @@ def display(record_info, EVR_EL_Recordset, rate_cut, yaw_trace, pitch_trace, net
 			sum_eff += eff
 		sum_eff /= VIDEO_FPS
 		total_eff += sum_eff
-		display_bitrate[EVR_EL_Recordset[i][0]] += sum_eff*rate_cut[EVR_EL_Recordset[i][1]]
-		receive_bitrate[EVR_EL_Recordset[i][0]] += rate_cut[EVR_EL_Recordset[i][1]]
+		display_bitrate[EVR_EL_Recordset[i][0]] += sum_eff*rate_cut[EVR_EL_Recordset[i][1]] * VP_SPAN_RATIO
+		receive_bitrate[EVR_EL_Recordset[i][0]] += rate_cut[EVR_EL_Recordset[i][1]] * VP_SPAN_RATIO
 		extra_freezing[EVR_EL_Recordset[i][0]] = EVR_EL_Recordset[i][10]
 		extra_cost[EVR_EL_Recordset[i][0]] = EVR_EL_Recordset[i][9]
 	average_eff = total_eff/len(EVR_EL_Recordset)
