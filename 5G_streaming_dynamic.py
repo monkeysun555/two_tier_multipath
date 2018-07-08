@@ -27,7 +27,7 @@ CHUNK_DURATION = 1.0
 KP = 0.6		# P controller
 KI = 0.01		# I controller
 PI_RANGE = 30
-
+DELAY = 0.02		# second
 
 class Streaming(object):
 	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut):
@@ -60,6 +60,8 @@ class Streaming(object):
 		self.pitch_predict_value = 0.0
 		self.pitch_predict_quan = 0
 
+		self.record_info = []
+
 	def run(self):
 		while self.video_seg_index_bl < VIDEO_LEN or \
 			(self.video_seg_index_bl >= VIDEO_LEN and self.video_seg_index_el < VIDEO_LEN):
@@ -68,11 +70,48 @@ class Streaming(object):
 				# self.bw_info = np.append(self.bw_info, [sniff_bw, self.network_time])
 				self.PI_control(sniff_bw)
 				self.update_seg_size()
-			temp_index = self.video_seg_index
-			if self.video_version != 0:
-				assert self.video_version != -1
-				self.yaw_predict_value, self.yaw_predict_quan = uti.predict_yaw(self.yaw_trace, self.display_time, self.video_seg_index)
-				self.pitch_predict_value, self.pitch_predict_quan = uti.predict_pitch(self.pitch_trace, self.display_time, self.video_seg_index)
+			
+				temp_index = self.video_seg_index
+				if self.video_version != 0:
+					assert self.video_version != -1
+					self.yaw_predict_value, self.yaw_predict_quan = uti.predict_yaw_trun(self.yaw_trace, self.display_time, self.video_seg_index)
+					self.pitch_predict_value, self.pitch_predict_quan = uti.predict_pitch_trun(self.pitch_trace, self.display_time, self.video_seg_index)
+			previous_time, recording_el = self.fetching()
+
+			# Record EL 
+			if not self.download_partial and 
+
+
+	def fetching(self):
+		temp_video_display_time = self.display_time
+		video_rate = 0
+		recording_el = 0
+		is_same_el = 0
+		record_bw = 1
+
+		if not self.download_partial:
+			current_time_left = np.ceil(temp_video_display_time) - temp_video_display_time
+			
+			# For the delay part, need record
+			if current_time_left < DELAY:
+
+			self.display_time += DELAY
+			self.network_time += DELAY
+			self.network_ptr = int(self.network_time)
+
+		throughput = self.network_trace[self.network_ptr]
+		duration = np.ceil(self.network_time) - self.network_time
+		if throughput * duration >= self.video_seg_size:
+			download_duration =  self.video_seg_size/throughput
+			self.download_partial = 0
+			if self.video_version == 0:
+				self.evr_bl_recordset.append([self.video_seg_index_bl, self.video_version, self.network_time, self.network_ptr])
+				self.network_time += download_duration
+				self.network_ptr = int(self.network_time)
+				self.video_seg_index_bl += 1
+				self.video_seg_index_el = np.maximum(int(np.floor(self.display_time))+1, self.video_seg_index_el)
+
+
 
 	def PI_control(self, sniff_bw):
 		current_video_version = -1
