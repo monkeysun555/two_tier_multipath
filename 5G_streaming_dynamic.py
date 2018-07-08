@@ -40,25 +40,39 @@ class Streaming(object):
 		self.network_ptr = 0
 		self.network_time = 0.0
 		self.display_time = 0.0
+
 		self.video_seg_index_bl = BUFFER_BL_INIT 
 		self.video_seg_index_el = BUFFER_EL_INIT
 		self.buffer_size_bl = BUFFER_BL_INIT
 		self.buffer_size_el = BUFFER_EL_INIT
 		self.buffer_history = []
+
 		self.download_partial = 0
+		self.video_seg_size = 0.0
 
 		self.video_bw_history = []
 		self.bw_info = []
+		self.video_version = 0
+		self.video_seg_index = 0
+
+		self.yaw_predict_value = 0.0
+		self.yaw_predict_quan = 0
+		self.pitch_predict_value = 0.0
+		self.pitch_predict_quan = 0
 
 	def run(self):
 		while self.video_seg_index_bl < VIDEO_LEN or \
 			(self.video_seg_index_bl >= VIDEO_LEN and self.video_seg_index_el < VIDEO_LEN):
 			if not self.download_partial:
 				sniff_bw = uti.predict_bw(self.video_bw_history)
-			# self.bw_info = np.append(self.bw_info, [sniff_bw, self.network_time])
-				self.video_version, self.video_seg_index = self.PI_control(sniff_bw)
-
-
+				# self.bw_info = np.append(self.bw_info, [sniff_bw, self.network_time])
+				self.PI_control(sniff_bw)
+				self.update_seg_size()
+			temp_index = self.video_seg_index
+			if self.video_version != 0:
+				assert self.video_version != -1
+				self.yaw_predict_value, self.yaw_predict_quan = uti.predict_yaw(self.yaw_trace, self.display_time, self.video_seg_index)
+				self.pitch_predict_value, self.pitch_predict_quan = uti.predict_pitch(self.pitch_trace, self.display_time, self.video_seg_index)
 
 	def PI_control(self, sniff_bw):
 		current_video_version = -1
@@ -87,8 +101,14 @@ class Streaming(object):
 			else:
 				current_video_version = 1
 			video_seg_index = self.video_seg_index_el
-		return current_video_version, video_seg_index
+		self.video_version = current_video_version
+		self.video_seg_index = video_seg_index
+		return
 		
+	def update_seg_size(self):
+		self.video_seg_size = self.video_trace[self.video_version][self.video_seg_index]
+		return
+
 def main():
 	# network_trace = loadNetworkTrace(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
 	half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
