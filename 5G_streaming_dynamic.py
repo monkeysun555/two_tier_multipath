@@ -95,9 +95,22 @@ class Streaming(object):
 			# For the delay part, need record
 			if current_time_left < DELAY:
 
-			self.display_time += DELAY
 			self.network_time += DELAY
 			self.network_ptr = int(self.network_time)
+
+			# No freezing
+			if self.buffer_size_bl >= DELAY:
+				self.display_time += DELAY
+				self.buffer_size_bl -= DELAY
+				if round(self.video_seg_index_el - temp_video_display_time, 3) > round(self.buffer_size_el, 3) and self.buffer_size_el != 0:
+					self.buffer_size_el = np.maximum(self.buffer_size_el, np.maximum(self.video_seg_index_el-self.display_time, 0.0))
+				else:
+					if round(self.video_seg_index_el - temp_video_display_time, 2) != round(self.buffer_size_el):
+						print(self.video_seg_index_el, temp_video_display_time, self.buffer_size_el)
+					self.buffer_size_el = np.maximum(self.buffer_size_el - DELAY, 0.0)
+			else:
+				assert self.buffer_size_el == 0
+				print("will not happen in this simulation!")
 
 		throughput = self.network_trace[self.network_ptr]
 		duration = np.ceil(self.network_time) - self.network_time
@@ -108,9 +121,13 @@ class Streaming(object):
 				self.evr_bl_recordset.append([self.video_seg_index_bl, self.video_version, self.network_time, self.network_ptr])
 				self.network_time += download_duration
 				self.network_ptr = int(self.network_time)
+
+				# how display time change and how buffer change
 				self.video_seg_index_bl += 1
 				self.video_seg_index_el = np.maximum(int(np.floor(self.display_time))+1, self.video_seg_index_el)
 
+			elif self.video_version >= 1:
+				
 
 
 	def PI_control(self, sniff_bw):
