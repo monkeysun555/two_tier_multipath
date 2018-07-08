@@ -268,7 +268,7 @@ class streaming(object):
 			###############
 			v = u + 1
 			delta_time = self.buffer_size_EL
-			R_hat = min(v, delta_time+u) * sniff_BW
+			R_hat = min(v, delta_time) * sniff_BW
 			# print(R_hat, self.buffer_size_EL, u_i, u_p, self.video_download_timestamp)
 			#########
 			# print(R_hat, sniff_BW, self.video_seg_index_EL)
