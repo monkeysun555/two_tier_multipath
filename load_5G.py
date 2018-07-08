@@ -13,7 +13,7 @@ def load_5G_Data(fname, multiple, addition):
 	new_content = []
 	for i in range(0,VIDEO_LEN):
 		new_content.append((content[2*i]+content[2*i+1])/2)
-	return content[:2*NETWORK_TRACE_LEN+1], new_content
+	return content[:2*NETWORK_TRACE_LEN], new_content
 
 def load_5G_latency(fname):
 	with open(fname) as f:
