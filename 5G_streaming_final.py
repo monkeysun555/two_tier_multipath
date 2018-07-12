@@ -8,9 +8,9 @@ import math
 BUFFER_BL_INIT = 10
 BUFFER_EL_INIT = 1
 Q_REF_BL = 10
-Q_REF_EL = 1
+Q_REF_EL = 2
 ET_MAX_PRED = Q_REF_EL + 1
-AVE_RATIO = 0.65 # previous 0.8, for test gamma
+AVE_RATIO = 0.85 # previous 0.8, for test gamma
 RBE_RATIO = 0.1
 IS_GAMMA = 0
 
@@ -52,9 +52,9 @@ BW_PRED_SAMPLE_SIZE = 10
 R_MIN = 100.0
 VER = 21
 VIEWPORT_TRACE_FILENAME = 'view_angle_combo_video1.mat'  ##video 1-4
-VIEWPORT_TRACE_FILENAME_NEW = 'Video_9_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
-REGULAR_CHANNEL_TRACE = 'BW_Trace_5G_1.txt'  # 1: partially disturbed  2: unstable  3: stable   4: medium_liyang 5:medium_fanyi
-DELAY_TRACE = 'delay_1.txt'
+VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_9_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
+REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_1.txt'  # 1: partially disturbed  2: unstable  3: stable   4: medium_liyang 5:medium_fanyi
+# DELAY_TRACE = './traces/bandwidth/delay_1.txt'
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
 ## In this file, alwayes use 5G trace to do streaming, 
@@ -63,7 +63,7 @@ CORRECT_TIME_HEAD = 0.1  ## Useless
 CORRECT_TIME_THRES = 0.2
 											 ##	
 #########################################   ##
-IS_AGAIN = 	1						       ## ##################
+IS_AGAIN = 	0						       ## ##################
 #########################################   ##
 AGAIN_THRES = 0.9	   ## from floor		 ##	
 AGAIN_BL_THRES = 10
@@ -268,7 +268,7 @@ class streaming(object):
 			###############
 			v = u + 1
 			delta_time = self.buffer_size_EL
-			R_hat = min(v, delta_time) * sniff_BW
+			R_hat = min(v, delta_time + u) * sniff_BW
 			# print(R_hat, self.buffer_size_EL, u_i, u_p, self.video_download_timestamp)
 			#########
 			# print(R_hat, sniff_BW, self.video_seg_index_EL)
@@ -1046,18 +1046,18 @@ def main():
 	# network_trace = loadNetworkTrace(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
 	half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
 	#### For 5G delay
-	network_delay = load_5G.load_5G_latency(DELAY_TRACE)
+	# network_delay = load_5G.load_5G_latency(DELAY_TRACE)
 	print("5G trace mean:", np.mean(network_trace))
 	print("5G trace standard deviation:", np.std(network_trace))
 	print("5G trace peak:", np.max(network_trace))
 	print("5G trace min:", np.min(network_trace))
 	print("5G trace median:", np.median(network_trace))
 
-	print("5G delay mean:", np.mean(network_delay))
-	print("5G delay standard deviation:", np.std(network_delay))
-	print("5G delay peak:", np.max(network_delay))
-	print("5G delay min:", np.min(network_delay))
-	print("5G delay median:", np.median(network_delay))
+	# print("5G delay mean:", np.mean(network_delay))
+	# print("5G delay standard deviation:", np.std(network_delay))
+	# print("5G delay peak:", np.max(network_delay))
+	# print("5G delay min:", np.min(network_delay))
+	# print("5G delay median:", np.median(network_delay))
 	# print(min(network_trace))
 	network_trace_aux = network_trace
 	# if CELL == 0: ## 4G trace
