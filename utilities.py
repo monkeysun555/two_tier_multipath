@@ -185,11 +185,29 @@ def predict_pitch_trun(pitch_trace, display_time, video_seg_index):
 		pitch_predict_value = 180.0
 	if pitch_predict_value < 0.0:
 		pitch_predict_value = 0.0
-	if pitch_predict_value > 90:
-		pitch_predict_quan = 2
+
+
+	## pitch quan range from 0 to 6:   0~15, 15 ~ 45, .... 135~165, 165~180
+	if pitch_predict_value < 15:
+		pitch_predict_quan = 0
+	elif pitch_predict_value >= 165:
+		pitch_predict_quan = 6
 	else:
-		pitch_predict_quan = 1
+		pitch_predict_quan = int((pitch_predict_value + 15)/30)
+	assert pitch_predict_quan >=0 and pitch_predict_quan <= 6
 	return pitch_predict_value, pitch_predict_quan
+
+def cal_accuracy(pred_yaw_quan, pred_pitch_quan, real_yaw, real_pitch):
+	# For yaw
+	pred_yaw_value = pred_yaw_quan * 30.0 + 15.0
+	yaw_distance = np.minimum(np.abs(real_yaw - pred_yaw_value), 360.0 - np.abs(real_yaw - pred_yaw_value)) 
+	# percentage of VP, not ET, inlcuding ET vidoe content
+	yaw_accuracy = np.minimum(1.0, np.maximum(0.0, ((VP_HOR_SPAN + ET_HOR_SPAN)/2.0 - yaw_distance)/VP_HOR_SPAN))	
+
+	# For pitch
+	pitch_accuracy = 0.0
+	if pred_pitch_quan == 1:	# 0 - 150
+		if real_pitch
 
 
 def show_result(streaming):
