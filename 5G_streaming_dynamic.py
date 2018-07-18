@@ -186,7 +186,7 @@ class Streaming(object):
 			# Increse buffer phase
 			if self.video_version == 0:
 				self.evr_bl_recordset.append([self.video_seg_index_bl, self.video_version, self.display_time, self.network_time, self.network_ptr])
-				self.video_seg_index_bl += CHUNK_DURATION
+				self.video_seg_index_bl += int(CHUNK_DURATION)
 				self.video_seg_index_el = np.maximum(int(np.floor(self.display_time))+1, self.video_seg_index_el)
 				self.buffer_size_bl += CHUNK_DURATION
 
@@ -200,12 +200,12 @@ class Streaming(object):
 					temporal_eff = 0.0
 				elif self.video_seg_index == int(np.floor(self.display_time)):
 					assert round(self.buffer_size_el,3) == 0
-					self.video_seg_index_el += 1
+					self.video_seg_index_el += int(CHUNK_DURATION)
 					self.buffer_size_el += CHUNK_DURATION - (self.display_time - int(np.floor(self.display_time)))
 					temporal_eff = CHUNK_DURATION - (self.display_time - np.floor(self.display_time))
 				else:
 					# 
-					self.video_seg_index_el += 1
+					self.video_seg_index_el += int(CHUNK_DURATION)
 					self.buffer_size_el += CHUNK_DURATION
 					temporal_eff = 1.0
 				
@@ -249,7 +249,7 @@ class Streaming(object):
 			self.buffer_size_bl = np.maximum(self.buffer_size_bl - duration, 0.0)
 
 			self.video_seg_index_el = np.maximum(self.video_seg_index_el, int(np.floor(self.display_time)) + 1)
-			self.video_seg_index_bl = np.maximum(self.video_seg_index_bl, round(self.display_time * 100)/100)
+			self.video_seg_index_bl = np.maximum(self.video_seg_index_bl, int(round(self.display_time * 100)/100))
 
 		if np.floor(round(self.display_time*100000)/100000) != np.floor(new_temp_video_display_time):
 			if self.buffer_size_bl == 0:
@@ -303,7 +303,9 @@ class Streaming(object):
 		return
 		
 	def update_seg_size(self):
-		self.video_seg_size = self.video_trace[self.video_version][self.video_seg_index]
+		#	based on whole video trace or rate cut
+		# self.video_seg_size = self.video_trace[self.video_version][self.video_seg_index]
+		self.video_seg_size = self.rate_cut[self.video_version]
 		return
 
 def main():
