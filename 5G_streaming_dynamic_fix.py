@@ -8,6 +8,7 @@ import utilities as uti
 
 VIDEO_LEN = 300
 VIDEO_FPS = 30
+UPDATE_FREQUENCY = 30
 # BW trace
 REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_2.txt'  # 1: partially disturbed  2: unstable  3: stable   4: medium_liyang 5:medium_fanyi
 # DELAY_TRACE = 'delay_1.txt'
@@ -36,9 +37,11 @@ class Streaming(object):
 		self.yaw_trace = yaw_trace
 		self.pitch_trace = pitch_trace
 		self.video_trace = video_trace
+
 		self.rate_cut = []
 		self.rate_cut.append(rate_cut)
 		self.rate_cut_version = 0
+		self.allocation_period = 0
 
 		self.network_ptr = 0
 		self.network_time = 0.0
@@ -70,10 +73,23 @@ class Streaming(object):
 		self.el_freezing_count = 0
 		self.freezing_time = 0
 
+	def rate_optimize():
+		gamma_curve = self.update_gamma()
+		alpha_curve = self.update_alpha()
+		average_bw = self.get_average_bw()
+		alpha_gamma = np.multiply(alpha_curve, gamma_curve)
+		optimal_alpha_gamma = np.amax(alpha_gamma)
+		optimal_buffer_len = np.argmax(alpha_gamma)
+		beta = 
+
+
 	def run(self):
 		while self.video_seg_index_bl < VIDEO_LEN or \
 			(self.video_seg_index_bl >= VIDEO_LEN and self.video_seg_index_el < VIDEO_LEN):
 			if not self.download_partial:
+				# adaptive rate allocation at fix frequency
+				if np.floor(self.display_time/30.0) != self.allocation_period:
+					self.rate_optimize()
 				sniff_bw = uti.predict_bw(self.video_bw_history)
 				# self.bw_info = np.append(self.bw_info, [sniff_bw, self.network_time])
 				self.PI_control(sniff_bw)
@@ -311,7 +327,7 @@ class Streaming(object):
 		#	based on whole video trace or rate cut
 		# self.video_seg_size = self.video_trace[self.video_version][self.video_seg_index]
 		self.video_seg_size = self.rate_cut[self.rate_cut_version][self.video_version]
-		return
+		return 
 
 def main():
 	# network_trace = loadNetworkTrace(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
@@ -324,7 +340,7 @@ def main():
 	video_trace = uti.generate_video_trace(init_video_rate)
 
 	streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate)
-	
+		
 	streaming_sim.run()
 
 	uti.show_result(streaming_sim)

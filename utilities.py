@@ -41,6 +41,7 @@ R_BASE = 100.0
 
 # Plot info
 FIGURE_NUM = 1
+SHOW_FIG = 1
 
 def show_network(network_trace):
 	print("5G trace mean:", np.mean(network_trace))
@@ -241,15 +242,15 @@ def show_rates(streaming):
 	rate_cut = streaming.rate_cut
 
 	for i in range(BUFFER_BL_INIT):
-		display_bitrate[i] += VP_BT_RATIO * rate_cut[0]
-		receive_bitrate[i] += VP_BT_RATIO * rate_cut[0]
+		display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+		receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
 
 	for i in range(BUFFER_EL_INIT):
-		display_bitrate[i] += VP_ET_RATIO * rate_cut[-1]
+		display_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
 
 	for i in range(len(bl_info)):
-		display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][1]]
-		receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][1]]
+		display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+		receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
 
 	for i in range(len(el_info)):
 		time_eff = el_info[i][9]
@@ -266,8 +267,8 @@ def show_rates(streaming):
 		el_accuracy = cal_accuracy(quan_yaw, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
 		if time_eff == 0:
 			assert el_accuracy == 0
-		receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][1]]
-		display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][1]]
+		receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
+		display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
 		total_alpha += el_accuracy
 		total_gamma += time_eff
 
@@ -307,7 +308,7 @@ def show_rates(streaming):
 
 	return g
 
-def show_result(streaming):
+def show_buffer(streaming):
 	## Plot buffer length
 	buffer_info = streaming.buffer_history
 	if np.ceil(streaming.display_time) < VIDEO_LEN:
@@ -336,11 +337,31 @@ def show_result(streaming):
 	plt.gcf().subplots_adjust(bottom=0.20, left=0.085, right=0.97)	
 	plt.axis([0, 300, 0, 20])
 
-	b = show_rates(streaming)
+	return a 
 
+def show_bw(streaming):
+	for i in range(len(streaming.video_bw_history)):
+		print("Bw at %s is %s and real is %s.\n" % (streaming.video_bw_history[i][1], \
+									streaming.video_bw_history[i][0], streaming.video_bw_history[i][4]))
+	
 
-	a.show()
-	b.show()
+def show_figure(figures):
+	for f in figures:
+		f.show()
 	raw_input()
+
+def show_result(streaming):
+	# record figures
+	figures = []
+	figures.append(show_buffer(streaming))
+	#	display and received bitrates
+	figures.append(show_rates(streaming))
+
+	# show_bw(streaming)
+	
+	if SHOW_FIG:
+		show_figure(figures)
+
+
 	return
 
