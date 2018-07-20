@@ -7,12 +7,16 @@ import matplotlib.pyplot as plt
 VIDEO_LEN = 300
 CHUNK_DURATION = 1.0
 
+#For alpha/gamma
+BUFFER_RANGE = 4
+A_G_LEN = 10
+
 # Rate Allocation
 BITRATE_LEN = 4
 INIT_BL_RATIO = 0.1
 INIT_EL_RATIO = 0.9
-EL_LOWEST_RATIO = 0.75
-EL_HIGHER_RATIO = 1.25
+EL_LOWEST_RATIO = 0.8
+EL_HIGHER_RATIO = 1.2
 BW_UTI_RATIO = 0.85
 
 # BW prediction
@@ -43,18 +47,18 @@ R_BASE = 100.0
 FIGURE_NUM = 1
 SHOW_FIG = 1
 
-#For alpha/gamma
-BUFFER_RANGE = 4
-A_G_LEN = 5
+
 
 def record_alpha(yaw_trace, pitch_trace, display_time, buffer_range = BUFFER_RANGE):
 	temp_alpha_len = np.minimum(buffer_range, VIDEO_LEN - int(round(display_time)))
-	temp_alpha = [[0.0, 0.0, 0.0]] * temp_alpha_len
+	temp_alpha = [[0] * 5 for i in range(temp_alpha_len)]
 	for i in range(temp_alpha_len):
 		temp_yaw_value, temp_yaw_quan = predict_yaw_trun(yaw_trace, display_time-0.5, int(round(display_time)) + i)
 		temp_pitch_value, temp_pitch_quan = predict_pitch_trun(pitch_trace, display_time-0.5, int(round(display_time)) + i)
-		temp_alpha[i][0] = temp_yaw_quan
-		temp_alpha[i][1] = temp_pitch_quan
+		temp_alpha[i][0] = temp_yaw_value
+		temp_alpha[i][1] = temp_yaw_quan
+		temp_alpha[i][2] = temp_pitch_value
+		temp_alpha[i][3] = temp_pitch_quan
 	return temp_alpha
 
 def rate_optimize(display_time, bw_history, alpha_history, version):
@@ -96,24 +100,32 @@ def update_alpha(display_time, alpha_history, version, buffer_range = BUFFER_RAN
 		alpha_calculation_len += 1	
 
 	alpha_calculation_len = np.minimum(alpha_calculation_len, A_G_LEN)
+	# print("alpha_history is: ", alpha_history, alpha_calculation_len)
 	assert alpha_calculation_len >= 1
 	if version > 0:
 		for i in range(buffer_range):
 			temp_alpha = 0.0
 			temp_alpha_count = 0
 			for j in range(alpha_calculation_len):
-				temp_alpha += alpha_history[-(j+i+2)][1][i][2]
+				temp_alpha += alpha_history[-(j+i+2)][1][i][4]
 				temp_alpha_count += 1
-			alpha[i] = temp_alpha/temp_alpha_count
+			if temp_alpha_count == 0:
+				alpha[i] = 0.0
+			else:
+				alpha[i] = temp_alpha/temp_alpha_count
 	else:
 		for i in range(buffer_range):
 			temp_alpha = 0.0
 			temp_alpha_count = 0
 			for j in range(alpha_calculation_len-i):
-				temp_alpha += alpha_history[-(j+i+2)][1][i][2]
+				temp_alpha += alpha_history[-(j+i+2)][1][i][4]
 				temp_alpha_count += 1
-			alpha[i] = temp_alpha/temp_alpha_count
+			if temp_alpha_count == 0:
+				alpha[i] = 0.0
+			else:
+				alpha[i] = temp_alpha/temp_alpha_count
 	
+	# alpha = [0.942, 0.896, 0.865, 0.825]
 	return alpha
 
 def get_average_bw(display_time, bw_history, version):
@@ -284,12 +296,15 @@ def predict_pitch_trun(pitch_trace, display_time, video_seg_index):
 	assert pitch_predict_quan >=0 and pitch_predict_quan <= 6
 	return pitch_predict_value, pitch_predict_quan
 
-def cal_accuracy(pred_yaw_quan, pred_pitch_quan, real_yaw_trace, real_pitch_trace, time_eff):
+def cal_accuracy(pred_yaw_value, pred_yaw_quan, pred_pitch_value, pred_pitch_quan, real_yaw_trace, real_pitch_trace, time_eff, pred_type = 'quan'):
 	if len(real_yaw_trace) == 0:
 		assert time_eff == 0
 		return 0.0
 	# For yaw
-	pred_yaw_value = pred_yaw_quan * 30.0 + 15.0
+	if pred_type == 'quan':
+		pred_yaw_value = pred_yaw_quan * 30.0 + 15.0
+		pred_pitch_value = pred_pitch_quan * 30.0
+
 	sum_yaw_eff = 0.0
 	yaw_eff = 0.0
 	for i in range(len(real_yaw_trace)):
@@ -303,7 +318,6 @@ def cal_accuracy(pred_yaw_quan, pred_pitch_quan, real_yaw_trace, real_pitch_trac
 	sum_pitch_eff = 0.0
 	pitch_eff = 0.0
 	# For pitch
-	pred_pitch_value = pred_pitch_quan * 30.0
 	for i in range(len(real_pitch_trace)):
 		pitch_distance = np.abs(pred_pitch_value - real_pitch_trace[i])
 		pitch_accuracy = np.minimum(1.0, np.maximum(0.0, (VP_VER_SPAN + ET_VER_SPAN)/2.0 - pitch_distance)/VP_VER_SPAN)
@@ -350,7 +364,7 @@ def show_rates(streaming):
 		real_pitch = el_info[i][8]
 		real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
 
-		el_accuracy = cal_accuracy(quan_yaw, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
+		el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
 		if time_eff == 0:
 			assert el_accuracy == 0
 		receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]

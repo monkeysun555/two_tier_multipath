@@ -5,12 +5,12 @@ import load_5G
 import math
 import utilities as uti
 
-DO_DYNAMIC = 1
+DO_DYNAMIC = 0
 VIDEO_LEN = 300
 VIDEO_FPS = 30
 UPDATE_FREQUENCY = 30
 # BW trace
-REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_2.txt'  # 1: partially disturbed  2: unstable  3: stable   4: medium_liyang 5:medium_fanyi
+REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_3.txt'  # 1: partially disturbed  2: unstable  3: stable   4: medium_liyang 5:medium_fanyi
 # DELAY_TRACE = 'delay_1.txt'
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
@@ -28,7 +28,7 @@ CHUNK_DURATION = 1.0
 #Others
 KP = 0.6		# P controller
 KI = 0.01		# I controller
-PI_RANGE = 30
+PI_RANGE = 10
 DELAY = 0.02		# second
 
 # For alpha/gamma
@@ -87,7 +87,7 @@ class Streaming(object):
 			(self.video_seg_index_bl >= VIDEO_LEN and self.video_seg_index_el < VIDEO_LEN):
 			if not self.download_partial:
 				# adaptive rate allocation at fix frequency
-				if DO_DYNAMIC and np.floor(self.display_time/UPDATE_FREQUENCY) != self.rate_cut_version:
+				if DO_DYNAMIC and int(np.floor(self.display_time/UPDATE_FREQUENCY)) != self.rate_cut_version:
 					self.alpha_history[-1][2] = self.rate_cut_version + 1
 					new_rate_cut, new_target_et_buffer = uti.rate_optimize(self.display_time, \
 													self.video_bw_history, self.alpha_history,\
@@ -258,7 +258,8 @@ class Streaming(object):
 
 			elif self.video_version >= 1:
 				temporal_eff = 1.0
-				assert self.buffer_size_el <= self.upper_et_buffer	
+				if self.buffer_size_el > self.upper_et_buffer:
+					print(self.buffer_size_el, self.upper_et_buffer)
 				if self.video_seg_index < int(np.floor(self.display_time)):
 					## This chunk is not useful
 					assert self.buffer_size_el == 0
@@ -345,18 +346,21 @@ class Streaming(object):
 		return temp_video_display_time, recording_el
 
 	def calculate_alpha(self, buffer_range = BUFFER_RANGE):
+		# print("calculate alpha time is: %s" %self.display_time)
 		for i in range(np.minimum(buffer_range, len(self.alpha_history))):
 			# Calculate accuracy for each prediction
-			yaw_predict_quan = self.alpha_history[-(i+1)][1][i][0]
-			pitch_predict_quan = self.alpha_history[-(i+1)][1][i][1]
+			yaw_predict_value = self.alpha_history[-(i+1)][1][i][0]
+			yaw_predict_quan = self.alpha_history[-(i+1)][1][i][1]
+			pitch_predict_value = self.alpha_history[-(i+1)][1][i][2]
+			pitch_predict_quan = self.alpha_history[-(i+1)][1][i][3]
+
 			start_frame = int(self.display_time*VIDEO_FPS) - VIDEO_FPS
 			end_frame = int(self.display_time*VIDEO_FPS)
 			real_yaw_trace = self.yaw_trace[start_frame:end_frame]
 			real_pitch_trace = self.pitch_trace[start_frame:end_frame]
-			alpha_value = uti.cal_accuracy(yaw_predict_quan, pitch_predict_quan,\
-												real_yaw_trace, real_pitch_trace, 1.0)
-			# print(i, yaw_predict_quan, pitch_predict_quan, alpha_value)
-			self.alpha_history[-(i+1)][1][i][2] = alpha_value
+			alpha_value = uti.cal_accuracy(yaw_predict_value, yaw_predict_quan, pitch_predict_value, pitch_predict_quan,\
+												real_yaw_trace, real_pitch_trace, 1.0, 'value')
+			self.alpha_history[-(i+1)][1][i][4] = alpha_value
 
 	def PI_control(self, sniff_bw):
 		current_video_version = -1
@@ -370,7 +374,7 @@ class Streaming(object):
 			u_p = KP * (self.buffer_size_el - self.target_et_buffer)
 			u_i = 0
 			if len(self.buffer_history) != 0:
-				for index in range(1, min(PI_RANGE+1, len(self.buffer_history)+1)):
+				for index in range(1, np.minimum(PI_RANGE+1, len(self.buffer_history)+1)):
 					u_i += KI * (self.buffer_history[-index][1] - self.target_et_buffer)
 			u = u_i + u_p
 
@@ -385,6 +389,8 @@ class Streaming(object):
 			else:
 				current_video_version = 1
 			video_seg_index = self.video_seg_index_el
+			print("el index is %s and version is %s, cause u: %s and delta_time: %s and sniff_bw: %s R_hat; %s" %\
+				(self.video_seg_index_el, current_video_version, u, delta_time, sniff_bw, R_hat))
 		self.video_version = current_video_version
 		self.video_seg_index = video_seg_index
 		# print("going to download: %s at %s" %(self.video_version, self.video_seg_index))
