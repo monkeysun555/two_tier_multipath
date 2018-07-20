@@ -5,7 +5,7 @@ import load_5G
 import math
 import utilities as uti
 
-
+DO_DYNAMIC = 1
 VIDEO_LEN = 300
 VIDEO_FPS = 30
 UPDATE_FREQUENCY = 30
@@ -31,6 +31,9 @@ KI = 0.01		# I controller
 PI_RANGE = 30
 DELAY = 0.02		# second
 
+# For alpha/gamma
+BUFFER_RANGE = 4
+
 class Streaming(object):
 	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut):
 		self.network_trace = network_trace
@@ -41,7 +44,6 @@ class Streaming(object):
 		self.rate_cut = []
 		self.rate_cut.append(rate_cut)
 		self.rate_cut_version = 0
-		self.allocation_period = 0
 
 		self.network_ptr = 0
 		self.network_time = 0.0
@@ -52,6 +54,8 @@ class Streaming(object):
 		self.buffer_size_bl = BUFFER_BL_INIT
 		self.buffer_size_el = BUFFER_EL_INIT
 		self.buffer_history = []
+		self.target_et_buffer = Q_REF_EL
+		self.upper_et_buffer = ET_MAX_PRED
 
 		self.download_partial = 0
 		self.video_seg_size = 0.0
@@ -73,14 +77,9 @@ class Streaming(object):
 		self.el_freezing_count = 0
 		self.freezing_time = 0
 
-	def rate_optimize():
-		gamma_curve = self.update_gamma()
-		alpha_curve = self.update_alpha()
-		average_bw = self.get_average_bw()
-		alpha_gamma = np.multiply(alpha_curve, gamma_curve)
-		optimal_alpha_gamma = np.amax(alpha_gamma)
-		optimal_buffer_len = np.argmax(alpha_gamma)
-		beta = 
+		# alpha and gamma
+		self.alpha_history = []
+
 
 
 	def run(self):
@@ -88,8 +87,16 @@ class Streaming(object):
 			(self.video_seg_index_bl >= VIDEO_LEN and self.video_seg_index_el < VIDEO_LEN):
 			if not self.download_partial:
 				# adaptive rate allocation at fix frequency
-				if np.floor(self.display_time/30.0) != self.allocation_period:
-					self.rate_optimize()
+				if DO_DYNAMIC and np.floor(self.display_time/UPDATE_FREQUENCY) != self.rate_cut_version:
+					self.alpha_history[-1][2] = self.rate_cut_version + 1
+					new_rate_cut, new_target_et_buffer = uti.rate_optimize(self.display_time, \
+													self.video_bw_history, self.alpha_history,\
+													self.rate_cut_version)
+					self.rate_cut.append(new_rate_cut)
+					self.rate_cut_version += 1
+					self.target_et_buffer = new_target_et_buffer
+					self.upper_et_buffer = self.target_et_buffer + 1
+				# Finish PI control
 				sniff_bw = uti.predict_bw(self.video_bw_history)
 				# self.bw_info = np.append(self.bw_info, [sniff_bw, self.network_time])
 				self.PI_control(sniff_bw)
@@ -117,36 +124,75 @@ class Streaming(object):
 		rebuf = 0.0
 
 		# Before sending request, check whether EL is requested and EL buffer is greater than MAX
-		if self.video_version >= 1 and round(self.buffer_size_el, 3) > ET_MAX_PRED:
+		if self.video_version >= 1 and round(self.buffer_size_el, 3) > self.upper_et_buffer:
 			assert self.download_partial != 1
 				# print("Current tiem is %s, and buffer length is %s, %s, is downloading %s" %(self.display_time, self.buffer_size_bl, self.buffer_size_el, self.video_version))
 			# need to sleep, nothing should be recorded
 			recording_el = 0
 			#Calculate sleep time
-			sleep_time = self.video_seg_index_el - ET_MAX_PRED - temp_video_display_time
-			assert sleep_time <= 1
-			self.display_time += sleep_time 
-			self.network_time += sleep_time
+			sleep_time = self.video_seg_index_el - self.upper_et_buffer - temp_video_display_time
+			if sleep_time > 1:
+				print("Buffer change trigger sleep greater than 1s, current time is: %s and sleep time is: %s" %(self.display_time, sleep_time))
+			first_sleep = sleep_time - np.floor(sleep_time - 10.**-8)
+			sleep_time -= first_sleep
+
+			self.display_time += first_sleep 
+			self.network_time += first_sleep
 			self.network_ptr = int(np.floor(self.network_time))
 
 			if round(self.display_time, 2) != round(self.network_time, 2):
 				print("Network time and display tims is not sync")
-			if round(self.video_seg_index_el - ET_MAX_PRED, 2) != round(self.display_time, 2):
+			if round(self.video_seg_index_el - self.upper_et_buffer, 2) != round(self.display_time, 2):
 				print("Two methods for sleep are not sync")
 
 			if round(self.video_seg_index_el - temp_video_display_time, 3) > round(self.buffer_size_el, 3) and self.buffer_size_el != 0:
 				self.buffer_size_el = np.maximum(self.buffer_size_el, np.maximum(self.video_seg_index_el - self.display_time, 0.0))
 			else:
-				if round(self.video_seg_index_el - temp_video_display_time, 2) != round(self.buffer_size_el, 2) and self.buffer_size_el != 0:
-					print(self.video_seg_index_el, temp_video_display_time, self.buffer_size_el)
-				self.buffer_size_el = np.maximum(self.buffer_size_el - sleep_time, 0.0)
+				if round(self.video_seg_index_el - temp_video_display_time, 2) != round(self.buffer_size_el, 2)  :
+					print("not equal case 1",self.video_seg_index_el, temp_video_display_time, self.buffer_size_el)
+				self.buffer_size_el = np.maximum(self.buffer_size_el - first_sleep, 0.0)
 			if not round(self.network_time, 3).is_integer():
 				print("Current network time is %s, not integer" % self.network_time)
-			self.buffer_size_bl -= sleep_time
+			
+			self.buffer_size_bl -= first_sleep
 			self.video_bw_history.append([self.network_trace[self.network_ptr], self.network_time, -1, \
 									self.rate_cut_version, self.network_trace[self.network_ptr]])
-			print("after sleep, Current tiem is %s, and buffer length is %s, %s, is downloading %s" %(self.display_time, self.buffer_size_bl, self.buffer_size_el, self.video_version))
+			# print("after sleep, Current tiem is %s, and buffer length is %s, %s, is downloading %s" %(self.display_time, self.buffer_size_bl, self.buffer_size_el, self.video_version))
 			self.buffer_history.append([round(round(self.buffer_size_bl*100 + 2)/100), round(round(self.buffer_size_el*100 + 2)/100), self.display_time])
+			if self.display_time >= 2.0:
+				self.calculate_alpha()
+				self.alpha_history.append([self.display_time, uti.record_alpha(self.yaw_trace, self.pitch_trace, self.display_time),\
+										 self.rate_cut_version])
+			temp_video_display_time = self.display_time
+			if sleep_time > 0:
+				print("greater than 1s, sleep left is: %s" % sleep_time)
+				assert sleep_time.is_integer()
+				for i in range(int(sleep_time)):
+					self.display_time += CHUNK_DURATION 
+					self.network_time += CHUNK_DURATION
+					self.network_ptr = int(np.floor(self.network_time))	
+
+					if round(self.video_seg_index_el - temp_video_display_time, 3) > round(self.buffer_size_el, 3) and self.buffer_size_el != 0:
+						self.buffer_size_el = np.minimum(self.buffer_size_el, np.maximum(self.video_seg_index_el - self.display_time, 0.0))
+					else:
+						if round(self.video_seg_index_el - temp_video_display_time, 2) != round(self.buffer_size_el, 2)  :
+							print("not equal case 1",self.video_seg_index_el, temp_video_display_time, self.buffer_size_el)
+						self.buffer_size_el = np.maximum(self.buffer_size_el - CHUNK_DURATION, 0.0)
+
+					if not round(self.network_time, 3).is_integer():
+						print("Current network time is %s, not integer" % self.network_time)
+					print("el buffer is: %s, time is %s, " % (self.buffer_size_el, self.display_time))
+
+					self.buffer_size_bl -= CHUNK_DURATION
+					self.video_bw_history.append([self.network_trace[self.network_ptr], self.network_time, -1, \
+											self.rate_cut_version, self.network_trace[self.network_ptr]])
+					# print("after sleep, Current tiem is %s, and buffer length is %s, %s, is downloading %s" %(self.display_time, self.buffer_size_bl, self.buffer_size_el, self.video_version))
+					self.buffer_history.append([round(round(self.buffer_size_bl*100 + 2)/100), round(round(self.buffer_size_el*100 + 2)/100), self.display_time])
+					if self.display_time >= 2.0:
+						self.calculate_alpha()		
+						self.alpha_history.append([self.display_time, uti.record_alpha(self.yaw_trace, self.pitch_trace, self.display_time),\
+												 self.rate_cut_version])
+					temp_video_display_time = self.display_time
 			return temp_video_display_time, recording_el
 
 		# All below don't need to consider sleep!
@@ -166,10 +212,10 @@ class Streaming(object):
 				self.display_time += DELAY
 				self.buffer_size_bl -= DELAY
 				if round(self.video_seg_index_el - temp_video_display_time, 3) > round(self.buffer_size_el, 3) and self.buffer_size_el != 0:
-					self.buffer_size_el = np.maximum(self.buffer_size_el, np.maximum(self.video_seg_index_el - self.display_time, 0.0))
+					self.buffer_size_el = np.minimum(self.buffer_size_el, np.maximum(self.video_seg_index_el - self.display_time, 0.0))
 				else:
-					if round(self.video_seg_index_el - temp_video_display_time, 2) != round(self.buffer_size_el, 2):
-						print(self.video_seg_index_el, temp_video_display_time, self.buffer_size_el)
+					if round(self.video_seg_index_el - temp_video_display_time, 2) != round(self.buffer_size_el, 2) and self.buffer_size_el != 0:
+						print("not equal case 2", self.video_seg_index_el, temp_video_display_time, self.buffer_size_el)
 					self.buffer_size_el = np.maximum(self.buffer_size_el - DELAY, 0.0)
 			else:
 				assert self.buffer_size_el == 0
@@ -192,11 +238,11 @@ class Streaming(object):
 			rebuf = np.maximum(download_duration - self.buffer_size_bl, 0.0)
 
 			self.buffer_size_bl = np.maximum(self.buffer_size_bl - download_duration, 0.0)
-			if round(self.video_seg_index_el - new_temp_video_display_time, 3) > round(self.buffer_size_el, 3) and self.buffer_size_el != 0:
+			if round(self.video_seg_index_el - new_temp_video_display_time, 3) > round(self.buffer_size_el, 3) and self.buffer_size_el > 0:
 				self.buffer_size_el = np.minimum(self.buffer_size_el, np.maximum(self.video_seg_index_el - self.display_time, 0.0))
 			else:
-				if round(self.video_seg_index_el - new_temp_video_display_time, 2) != round(self.buffer_size_el, 2):
-					print(self.video_seg_index_el, temp_video_display_time, self.buffer_size_el)
+				if round(self.video_seg_index_el - new_temp_video_display_time, 2) != round(self.buffer_size_el, 2) and self.buffer_size_el != 0:
+					print("not equal case 3", self.video_seg_index_el, new_temp_video_display_time, self.buffer_size_el)
 				self.buffer_size_el = np.maximum(self.buffer_size_el - download_duration, 0.0)
 			
 			## Switch based on version, go through the buffer and time changing again
@@ -212,7 +258,7 @@ class Streaming(object):
 
 			elif self.video_version >= 1:
 				temporal_eff = 1.0
-				assert self.buffer_size_el <= ET_MAX_PRED	
+				assert self.buffer_size_el <= self.upper_et_buffer	
 				if self.video_seg_index < int(np.floor(self.display_time)):
 					## This chunk is not useful
 					assert self.buffer_size_el == 0
@@ -263,8 +309,8 @@ class Streaming(object):
 			if round(self.video_seg_index_el - new_temp_video_display_time, 3) > round(self.buffer_size_el, 3) and self.buffer_size_el != 0:
 				self.buffer_size_el = np.minimum(self.buffer_size_el, np.maximum(self.video_seg_index_el - self.display_time, 0.0))
 			else:
-				if round(self.video_seg_index_el - new_temp_video_display_time, 2) != round(self.buffer_size_el, 2):
-					print(self.video_seg_index_el, temp_video_display_time, self.buffer_size_el)
+				if round(self.video_seg_index_el - new_temp_video_display_time, 2) != round(self.buffer_size_el, 2) and self.buffer_size_el != 0:
+					print("not equal case 4", self.video_seg_index_el, temp_video_display_time, self.buffer_size_el)
 				self.buffer_size_el = np.maximum(self.buffer_size_el - duration, 0.0)
 
 			self.buffer_size_bl = np.maximum(self.buffer_size_bl - duration, 0.0)
@@ -272,7 +318,14 @@ class Streaming(object):
 			self.video_seg_index_el = np.maximum(self.video_seg_index_el, int(np.floor(self.display_time)) + 1)
 			self.video_seg_index_bl = np.maximum(self.video_seg_index_bl, int(round(self.display_time * 100)/100))
 
+		# Finish on second, record nencessary information
 		if np.floor(round(self.display_time*100000)/100000) != np.floor(new_temp_video_display_time):
+			# Predict alpha curve and record accuracy 
+			if self.display_time >= 2.0:
+				self.calculate_alpha()
+				self.alpha_history.append([self.display_time, uti.record_alpha(self.yaw_trace, self.pitch_trace, self.display_time),\
+										 self.rate_cut_version])
+
 			if self.buffer_size_bl == 0:
 				self.bl_freezing_count += 1
 				self.freezing_time += rebuf
@@ -280,8 +333,8 @@ class Streaming(object):
 				self.el_freezing_count += 1
 
 			self.buffer_history.append([round(self.buffer_size_bl*100)/100, round(self.buffer_size_el*100)/100, self.display_time])
-			print("Current tiem is %s, and buffer length is %s, %s" %(self.display_time, self.buffer_size_bl, self.buffer_size_el))
-			print("bl and el index is %s and %s" % (self.video_seg_index_bl, self.video_seg_index_el))
+			# print("Current time is %s, and buffer length is %s, %s" %(self.display_time, self.buffer_size_bl, self.buffer_size_el))
+			# print("bl and el index is %s and %s" % (self.video_seg_index_bl, self.video_seg_index_el))
 		if (self.video_seg_index_el >= VIDEO_LEN and self.video_seg_index_bl >= VIDEO_LEN):
 			# Make up for last chunk info
 			final_time_left = np.ceil(self.display_time) - self.display_time
@@ -290,6 +343,20 @@ class Streaming(object):
 			self.buffer_history.append([round(temp_buffer_size_bl*100)/100, round(temp_buffer_size_el*100)/100, np.ceil(self.display_time)])
 
 		return temp_video_display_time, recording_el
+
+	def calculate_alpha(self, buffer_range = BUFFER_RANGE):
+		for i in range(np.minimum(buffer_range, len(self.alpha_history))):
+			# Calculate accuracy for each prediction
+			yaw_predict_quan = self.alpha_history[-(i+1)][1][i][0]
+			pitch_predict_quan = self.alpha_history[-(i+1)][1][i][1]
+			start_frame = int(self.display_time*VIDEO_FPS) - VIDEO_FPS
+			end_frame = int(self.display_time*VIDEO_FPS)
+			real_yaw_trace = self.yaw_trace[start_frame:end_frame]
+			real_pitch_trace = self.pitch_trace[start_frame:end_frame]
+			alpha_value = uti.cal_accuracy(yaw_predict_quan, pitch_predict_quan,\
+												real_yaw_trace, real_pitch_trace, 1.0)
+			# print(i, yaw_predict_quan, pitch_predict_quan, alpha_value)
+			self.alpha_history[-(i+1)][1][i][2] = alpha_value
 
 	def PI_control(self, sniff_bw):
 		current_video_version = -1
@@ -300,11 +367,11 @@ class Streaming(object):
 
 		elif (self.buffer_size_bl >= Q_REF_BL and self.video_seg_index_el < VIDEO_LEN) \
 			or (self.video_seg_index_bl >= VIDEO_LEN and self.video_seg_index_el < VIDEO_LEN):
-			u_p = KP * (self.buffer_size_el - Q_REF_EL)
+			u_p = KP * (self.buffer_size_el - self.target_et_buffer)
 			u_i = 0
 			if len(self.buffer_history) != 0:
 				for index in range(1, min(PI_RANGE+1, len(self.buffer_history)+1)):
-					u_i += KI * (self.buffer_history[-index][1] - Q_REF_EL)
+					u_i += KI * (self.buffer_history[-index][1] - self.target_et_buffer)
 			u = u_i + u_p
 
 			v = u + 1
@@ -320,7 +387,7 @@ class Streaming(object):
 			video_seg_index = self.video_seg_index_el
 		self.video_version = current_video_version
 		self.video_seg_index = video_seg_index
-		print("going to download: %s at %s" %(self.video_version, self.video_seg_index))
+		# print("going to download: %s at %s" %(self.video_version, self.video_seg_index))
 		return
 		
 	def update_seg_size(self):

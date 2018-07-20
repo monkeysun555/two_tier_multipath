@@ -43,6 +43,91 @@ R_BASE = 100.0
 FIGURE_NUM = 1
 SHOW_FIG = 1
 
+#For alpha/gamma
+BUFFER_RANGE = 4
+A_G_LEN = 5
+
+def record_alpha(yaw_trace, pitch_trace, display_time, buffer_range = BUFFER_RANGE):
+	temp_alpha_len = np.minimum(buffer_range, VIDEO_LEN - int(round(display_time)))
+	temp_alpha = [[0.0, 0.0, 0.0]] * temp_alpha_len
+	for i in range(temp_alpha_len):
+		temp_yaw_value, temp_yaw_quan = predict_yaw_trun(yaw_trace, display_time-0.5, int(round(display_time)) + i)
+		temp_pitch_value, temp_pitch_quan = predict_pitch_trun(pitch_trace, display_time-0.5, int(round(display_time)) + i)
+		temp_alpha[i][0] = temp_yaw_quan
+		temp_alpha[i][1] = temp_pitch_quan
+	return temp_alpha
+
+def rate_optimize(display_time, bw_history, alpha_history, version):
+	gamma_curve = update_gamma()
+	alpha_curve = update_alpha(display_time, alpha_history, version)
+	average_bw, average_bw_real = get_average_bw(display_time, bw_history, version)
+
+	alpha_gamma = np.multiply(alpha_curve, gamma_curve)
+	optimal_alpha_gamma = np.amax(alpha_gamma)
+	optimal_buffer_len = np.argmax(alpha_gamma)
+	beta = ((1 - optimal_alpha_gamma)*(ET_VER_SPAN*ET_HOR_SPAN))/ \
+			(optimal_alpha_gamma*(BT_VER_SPAN*BT_HOR_SPAN - ET_HOR_SPAN*ET_VER_SPAN))
+
+	rate_et_average = BW_UTI_RATIO*average_bw/ \
+					(1 + (BT_HOR_SPAN*BT_VER_SPAN*beta)/((1-beta)*ET_HOR_SPAN*ET_VER_SPAN))
+	rate_bt_average = BW_UTI_RATIO*average_bw - rate_et_average
+	rate_et_low = rate_et_average * EL_LOWEST_RATIO
+	rate_et_high = rate_et_average * EL_HIGHER_RATIO
+	#update rate cut and rate cut version
+	print("Do a optimzation, current time is %s" % display_time)
+	print("Alpha is: ", alpha_curve)
+	print("Gamma is: ", gamma_curve)
+	print("alpha gamma is: ", alpha_gamma)
+	print("average bw is %s, rate_bt is: %s and rate_et is: %s" %(average_bw, rate_bt_average, rate_et_average))
+	print("<++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++>")
+	print("<++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++>")
+	return [rate_bt_average, rate_et_low, rate_et_average, rate_et_high], optimal_buffer_len
+
+def update_gamma():
+	# Fix gamma
+	return [0.747, 0.846, 0.903, 0.938]
+
+def update_alpha(display_time, alpha_history, version, buffer_range = BUFFER_RANGE):
+	alpha = [0.0]*buffer_range
+	alpha_calculation_len = 0
+	for i in reversed(range(len(alpha_history)-1)):
+		if alpha_history[i][2] != version:
+			break
+		alpha_calculation_len += 1	
+
+	alpha_calculation_len = np.minimum(alpha_calculation_len, A_G_LEN)
+	assert alpha_calculation_len >= 1
+	if version > 0:
+		for i in range(buffer_range):
+			temp_alpha = 0.0
+			temp_alpha_count = 0
+			for j in range(alpha_calculation_len):
+				temp_alpha += alpha_history[-(j+i+2)][1][i][2]
+				temp_alpha_count += 1
+			alpha[i] = temp_alpha/temp_alpha_count
+	else:
+		for i in range(buffer_range):
+			temp_alpha = 0.0
+			temp_alpha_count = 0
+			for j in range(alpha_calculation_len-i):
+				temp_alpha += alpha_history[-(j+i+2)][1][i][2]
+				temp_alpha_count += 1
+			alpha[i] = temp_alpha/temp_alpha_count
+	
+	return alpha
+
+def get_average_bw(display_time, bw_history, version):
+	bw_sum = 0.0
+	bw_sum_real = 0.0
+	bw_count = 0
+	for i in reversed(range(len(bw_history))):
+		if bw_history[i][3] == version:
+			bw_sum += bw_history[i][0]
+			bw_sum_real += bw_history[i][4]
+			bw_count += 1
+	return bw_sum/bw_count, bw_sum_real/bw_count
+
+
 def show_network(network_trace):
 	print("5G trace mean:", np.mean(network_trace))
 	print("5G trace standard deviation:", np.std(network_trace))
@@ -247,6 +332,7 @@ def show_rates(streaming):
 
 	for i in range(BUFFER_EL_INIT):
 		display_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
+		receive_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
 
 	for i in range(len(bl_info)):
 		display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
@@ -281,7 +367,7 @@ def show_rates(streaming):
 
 	print("Average alpha ratio: ", (total_alpha + 1.0)/VIDEO_LEN)
 	print("Average effective alpha: ", (total_alpha + 1.0)/(len(el_info) + 1))
-	print("EL existing ratio: ", (len(el_info)+1)/VIDEO_LEN)
+	print("EL existing ratio: ", (len(el_info)+1.0)/VIDEO_LEN)
 	print("Average gamma: ", (total_gamma + 1.0)/VIDEO_LEN)
 
 	print("Displayed effective rate sum: ", sum(display_bitrate))
@@ -358,6 +444,9 @@ def show_result(streaming):
 	figures.append(show_rates(streaming))
 
 	# show_bw(streaming)
+
+	# for i in streaming.alpha_history:
+	# 	print(i)
 	
 	if SHOW_FIG:
 		show_figure(figures)
