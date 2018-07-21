@@ -10,7 +10,7 @@ VIDEO_LEN = 300
 VIDEO_FPS = 30
 UPDATE_FREQUENCY = 30
 # BW trace
-REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_3.txt'  # 1: partially disturbed  2: unstable  3: stable   4: medium_liyang 5:medium_fanyi
+REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_2.txt'  # 1: partially disturbed  2: unstable  3: stable   4: medium_liyang 5:medium_fanyi
 # DELAY_TRACE = 'delay_1.txt'
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
@@ -389,8 +389,8 @@ class Streaming(object):
 			else:
 				current_video_version = 1
 			video_seg_index = self.video_seg_index_el
-			print("el index is %s and version is %s, cause u: %s and delta_time: %s and sniff_bw: %s R_hat; %s" %\
-				(self.video_seg_index_el, current_video_version, u, delta_time, sniff_bw, R_hat))
+			# print("el index is %s and version is %s, cause u: %s and delta_time: %s and sniff_bw: %s R_hat; %s" %\
+			# 	(self.video_seg_index_el, current_video_version, u, delta_time, sniff_bw, R_hat))
 		self.video_version = current_video_version
 		self.video_seg_index = video_seg_index
 		# print("going to download: %s at %s" %(self.video_version, self.video_seg_index))
