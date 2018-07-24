@@ -1,3 +1,5 @@
+# Sreaming ET only on multipath, no BT,
+# No results used from this simulation
 
 import scipy.io as sio
 import numpy as np

@@ -1,3 +1,4 @@
+# Utilities for 5G dynamic related simulations
 import numpy as np
 import math
 import scipy.io as sio

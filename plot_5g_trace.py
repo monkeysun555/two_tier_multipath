@@ -1,3 +1,5 @@
+# To plot 5G bandwidth traces
+
 import matplotlib.pyplot as plt
 import numpy as np
 
