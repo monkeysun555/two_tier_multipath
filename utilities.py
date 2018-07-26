@@ -8,17 +8,23 @@ import matplotlib.pyplot as plt
 VIDEO_LEN = 300
 CHUNK_DURATION = 1.0
 
-#For alpha/gamma
+# For alpha/gamma
+# ALPHA_CAL_LEN is the length of calculating alpha, in seconds
+# GAMMA_CAL_LEN is the length of calculating gamma, in seconds
+ALPHA_DYNAMIC = 1	# <======================= alpha control
 BUFFER_RANGE = 4
-A_G_LEN = 10
+ALPHA_CAL_LEN = 10
+GAMMA_CAL_LEN = 10
+BW_THRESHOLD = 0.2
 
 # Rate Allocation
 BITRATE_LEN = 4
 INIT_BL_RATIO = 0.1
 INIT_EL_RATIO = 0.9
-EL_LOWEST_RATIO = 0.8
-EL_HIGHER_RATIO = 1.2
+EL_LOWEST_RATIO = 0.75
+EL_HIGHER_RATIO = 1.25
 BW_UTI_RATIO = 0.85
+BW_DALAY_RATIO = 0.95
 
 # BW prediction
 BW_PRED_SAMPLE_SIZE = 10	# second
@@ -49,24 +55,9 @@ FIGURE_NUM = 1
 SHOW_FIG = 1
 
 
-
-def record_alpha(yaw_trace, pitch_trace, display_time, buffer_range = BUFFER_RANGE):
-	temp_alpha_len = np.minimum(buffer_range, VIDEO_LEN - int(round(display_time)))
-	temp_alpha = [[0] * 5 for i in range(temp_alpha_len)]
-	for i in range(temp_alpha_len):
-		temp_yaw_value, temp_yaw_quan = predict_yaw_trun(yaw_trace, display_time-0.5, int(round(display_time)) + i)
-		temp_pitch_value, temp_pitch_quan = predict_pitch_trun(pitch_trace, display_time-0.5, int(round(display_time)) + i)
-		temp_alpha[i][0] = temp_yaw_value
-		temp_alpha[i][1] = temp_yaw_quan
-		temp_alpha[i][2] = temp_pitch_value
-		temp_alpha[i][3] = temp_pitch_quan
-	return temp_alpha
-
-def rate_optimize(display_time, bw_history, alpha_history, version):
-	gamma_curve = update_gamma()
+def rate_optimize(display_time, average_bw, var_bw, alpha_history, version):
+	gamma_curve = update_gamma(average_bw, var_bw)
 	alpha_curve = update_alpha(display_time, alpha_history, version)
-	average_bw, average_bw_real = get_average_bw(display_time, bw_history, version)
-
 	alpha_gamma = np.multiply(alpha_curve, gamma_curve)
 	optimal_alpha_gamma = np.amax(alpha_gamma)
 	optimal_buffer_len = np.argmax(alpha_gamma)
@@ -88,57 +79,104 @@ def rate_optimize(display_time, bw_history, alpha_history, version):
 	print("<++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++>")
 	return [rate_bt_average, rate_et_low, rate_et_average, rate_et_high], optimal_buffer_len
 
-def update_gamma():
+
+def cal_average_bw(network_time, bw_history, last_ref_time):
+	average_gamma_bw = 0.0
+	variance_gamma_bw = 0.0
+	average_gamma_real = 0.0
+	if network_time - GAMMA_CAL_LEN < last_ref_time:
+		average_gamma_bw = -1.0
+		variance_gamma_bw = -1.0
+		average_gamma_real = -1.0
+	else:
+		ref_time = network_time - GAMMA_CAL_LEN
+		temp_bw = []
+		temp_real = []
+		for i in reversed(range(len(bw_history))):
+			if bw_history[i][1] < ref_time:
+				break
+			else:
+				temp_bw.append(bw_history[i][0])
+				temp_real.append(bw_history[i][4])
+		average_gamma_bw = np.sum(temp_bw)/len(temp_bw)
+		variance_gamma_bw = np.var(temp_bw)/average_gamma_bw
+		average_gamma_real = np.sum(temp_real)/len(temp_real)
+	return average_gamma_bw, variance_gamma_bw, average_gamma_real
+
+def is_bw_change(current_bw, ref_bw):
+	if current_bw >= (1+BW_THRESHOLD)*ref_bw or current_bw <= (1-BW_THRESHOLD)*ref_bw:
+		return True
+	else:
+		return False
+
+def record_alpha(yaw_trace, pitch_trace, display_time, buffer_range = BUFFER_RANGE):
+	temp_alpha_len = np.minimum(buffer_range, VIDEO_LEN - int(round(display_time)))
+	temp_alpha = [[0] * 5 for i in range(temp_alpha_len)]
+	for i in range(temp_alpha_len):
+		temp_yaw_value, temp_yaw_quan = predict_yaw_trun(yaw_trace, display_time-0.5, int(round(display_time)) + i)
+		temp_pitch_value, temp_pitch_quan = predict_pitch_trun(pitch_trace, display_time-0.5, int(round(display_time)) + i)
+		temp_alpha[i][0] = temp_yaw_value
+		temp_alpha[i][1] = temp_yaw_quan
+		temp_alpha[i][2] = temp_pitch_value
+		temp_alpha[i][3] = temp_pitch_quan
+	return temp_alpha
+
+
+def update_gamma(average_bw, var_bw):
 	# Fix gamma
 	return [0.747, 0.846, 0.903, 0.938]
 
 def update_alpha(display_time, alpha_history, version, buffer_range = BUFFER_RANGE):
 	alpha = [0.0]*buffer_range
-	alpha_calculation_len = 0
-	for i in reversed(range(len(alpha_history)-1)):
-		if alpha_history[i][2] != version:
-			break
-		alpha_calculation_len += 1	
+	if ALPHA_DYNAMIC:
+		alpha_calculation_len = 0
+		for i in reversed(range(len(alpha_history)-1)):
+			if alpha_history[i][2] != version:
+				break
+			alpha_calculation_len += 1	
 
-	alpha_calculation_len = np.minimum(alpha_calculation_len, A_G_LEN)
-	# print("alpha_history is: ", alpha_history, alpha_calculation_len)
-	assert alpha_calculation_len >= 1
-	if version > 0:
-		for i in range(buffer_range):
-			temp_alpha = 0.0
-			temp_alpha_count = 0
-			for j in range(alpha_calculation_len):
-				temp_alpha += alpha_history[-(j+i+2)][1][i][4]
-				temp_alpha_count += 1
-			if temp_alpha_count == 0:
-				alpha[i] = 0.0
-			else:
-				alpha[i] = temp_alpha/temp_alpha_count
+		alpha_calculation_len = np.minimum(alpha_calculation_len, ALPHA_CAL_LEN)
+		# print("alpha_history is: ", alpha_history, alpha_calculation_len)
+		assert alpha_calculation_len >= 1
+		if version > 0:
+			for i in range(buffer_range):
+				temp_alpha = 0.0
+				temp_alpha_count = 0
+				for j in range(alpha_calculation_len):
+					temp_alpha += alpha_history[-(j+i+2)][1][i][4]
+					temp_alpha_count += 1
+				if temp_alpha_count == 0:
+					alpha[i] = 0.0
+				else:
+					alpha[i] = temp_alpha/temp_alpha_count
+		else:
+			for i in range(buffer_range):
+				temp_alpha = 0.0
+				temp_alpha_count = 0
+				for j in range(alpha_calculation_len-i):
+					temp_alpha += alpha_history[-(j+i+2)][1][i][4]
+					temp_alpha_count += 1
+				if temp_alpha_count == 0:
+					alpha[i] = 0.0
+				else:
+					alpha[i] = temp_alpha/temp_alpha_count
 	else:
-		for i in range(buffer_range):
-			temp_alpha = 0.0
-			temp_alpha_count = 0
-			for j in range(alpha_calculation_len-i):
-				temp_alpha += alpha_history[-(j+i+2)][1][i][4]
-				temp_alpha_count += 1
-			if temp_alpha_count == 0:
-				alpha[i] = 0.0
-			else:
-				alpha[i] = temp_alpha/temp_alpha_count
+		alpha = [0.942, 0.896, 0.865, 0.825]
 	
-	# alpha = [0.942, 0.896, 0.865, 0.825]
 	return alpha
 
 def get_average_bw(display_time, bw_history, version):
-	bw_sum = 0.0
-	bw_sum_real = 0.0
-	bw_count = 0
+	bw_record = []
+	bw_real = []
+	# bw_count = 0
 	for i in reversed(range(len(bw_history))):
 		if bw_history[i][3] == version:
-			bw_sum += bw_history[i][0]
-			bw_sum_real += bw_history[i][4]
-			bw_count += 1
-	return bw_sum/bw_count, bw_sum_real/bw_count
+			bw_record.append(bw_history[i][0])
+			bw_real.append(bw_history[i][4])
+		else:
+			break
+	average_bw = np.sum(bw_record)/len(bw_record)
+	return average_bw, np.var(bw_record)/average_bw, np.sum(bw_real)/len(bw_real) 
 
 
 def show_network(network_trace):

@@ -28,14 +28,17 @@ Q_REF_EL = 1
 ET_MAX_PRED = Q_REF_EL + 1
 
 CHUNK_DURATION = 1.0
+
 #Others
 KP = 0.6		# P controller
 KI = 0.01		# I controller
 PI_RANGE = 10
 DELAY = 0.02		# second
 
-# For alpha/gamma
+# For alpha/gamma curve length
 BUFFER_RANGE = 4
+BW_DALAY_RATIO = 0.95
+
 
 class Streaming(object):
 	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut):
@@ -64,9 +67,14 @@ class Streaming(object):
 		self.video_seg_size = 0.0
 
 		# self.bw_info = []
+		self.target_buffer_history = []
+		self.target_buffer_history.append(Q_REF_EL)
 		self.video_bw_history = []
 		self.video_version = 0
 		self.video_seg_index = 0
+
+		self.last_ref_bw = rate_cut[0] + rate_cut[2]
+		self.last_ref_time = 0.0
 
 		self.yaw_predict_value = 0.0
 		self.yaw_predict_quan = 0
@@ -83,22 +91,23 @@ class Streaming(object):
 		# alpha and gamma
 		self.alpha_history = []
 
-
-
 	def run(self):
 		while self.video_seg_index_bl < VIDEO_LEN or \
 			(self.video_seg_index_bl >= VIDEO_LEN and self.video_seg_index_el < VIDEO_LEN):
 			if not self.download_partial:
 				# adaptive rate allocation at fix frequency
-				if DO_DYNAMIC and int(np.floor(self.display_time/UPDATE_FREQUENCY)) != self.rate_cut_version:
-					self.alpha_history[-1][2] = self.rate_cut_version + 1
-					new_rate_cut, new_target_et_buffer = uti.rate_optimize(self.display_time, \
-													self.video_bw_history, self.alpha_history,\
-													self.rate_cut_version)
-					self.rate_cut.append(new_rate_cut)
-					self.rate_cut_version += 1
-					self.target_et_buffer = new_target_et_buffer
-					self.upper_et_buffer = self.target_et_buffer + 1
+				if DO_DYNAMIC:
+					updating_bw, current_period_bw, current_period_var, currend_real_bw = self.check_bw_status()
+					if updating_bw:
+						self.alpha_history[-1][2] = self.rate_cut_version + 1
+						new_rate_cut, new_target_et_buffer = uti.rate_optimize(self.display_time, \
+														current_period_bw, current_period_var, \
+														self.alpha_history, self.rate_cut_version)
+						self.rate_cut.append(new_rate_cut)
+						self.rate_cut_version += 1
+						self.target_et_buffer = new_target_et_buffer
+						self.upper_et_buffer = self.target_et_buffer + 1
+						self.target_buffer_history.append(new_target_et_buffer)
 				# Finish PI control
 				sniff_bw = uti.predict_bw(self.video_bw_history)
 				# self.bw_info = np.append(self.bw_info, [sniff_bw, self.network_time])
@@ -110,12 +119,83 @@ class Streaming(object):
 					assert self.video_version != -1
 					self.yaw_predict_value, self.yaw_predict_quan = uti.predict_yaw_trun(self.yaw_trace, self.display_time, self.video_seg_index)
 					self.pitch_predict_value, self.pitch_predict_quan = uti.predict_pitch_trun(self.pitch_trace, self.display_time, self.video_seg_index)
+			
 			previous_time, recording_el = self.fetching()
 
 			# Record EL 
 			if not self.download_partial and recording_el:
 				print("need recoding el")
 
+	def check_bw_status(self):
+		bw_current_period, var_current_period, bw_real = uti.cal_average_bw(self.network_time, self.video_bw_history, \
+												self.last_ref_time)
+		# Current period time is too short
+		if bw_current_period < 0:
+			return False, bw_current_period, var_current_period, bw_real
+		else:
+			if uti.is_bw_change(bw_current_period, self.last_ref_bw):
+				self.last_ref_bw = bw_current_period
+				self.last_ref_time = self.network_time
+				return True, bw_current_period, var_current_period, bw_real
+			else:
+				return False, bw_current_period, var_current_period, bw_real
+
+	def calculate_alpha(self, buffer_range = BUFFER_RANGE):
+		# print("calculate alpha time is: %s" %self.display_time)
+		for i in range(np.minimum(buffer_range, len(self.alpha_history))):
+			# Calculate accuracy for each prediction
+			yaw_predict_value = self.alpha_history[-(i+1)][1][i][0]
+			yaw_predict_quan = self.alpha_history[-(i+1)][1][i][1]
+			pitch_predict_value = self.alpha_history[-(i+1)][1][i][2]
+			pitch_predict_quan = self.alpha_history[-(i+1)][1][i][3]
+
+			start_frame = int(self.display_time*VIDEO_FPS) - VIDEO_FPS
+			end_frame = int(self.display_time*VIDEO_FPS)
+			real_yaw_trace = self.yaw_trace[start_frame:end_frame]
+			real_pitch_trace = self.pitch_trace[start_frame:end_frame]
+			alpha_value = uti.cal_accuracy(yaw_predict_value, yaw_predict_quan, pitch_predict_value, pitch_predict_quan,\
+												real_yaw_trace, real_pitch_trace, 1.0, 'value')
+			self.alpha_history[-(i+1)][1][i][4] = alpha_value
+
+	def PI_control(self, sniff_bw):
+		current_video_version = -1
+		video_seg_index = -1
+		if self.buffer_size_bl < Q_REF_BL and self.video_seg_index_bl < VIDEO_LEN:
+			current_video_version = 0
+			video_seg_index = self.video_seg_index_bl
+
+		elif (self.buffer_size_bl >= Q_REF_BL and self.video_seg_index_el < VIDEO_LEN) \
+			or (self.video_seg_index_bl >= VIDEO_LEN and self.video_seg_index_el < VIDEO_LEN):
+			u_p = KP * (self.buffer_size_el - self.target_et_buffer)
+			u_i = 0
+			if len(self.buffer_history) != 0:
+				for index in range(1, np.minimum(PI_RANGE+1, len(self.buffer_history)+1)):
+					u_i += KI * (self.buffer_history[-index][1] - self.target_et_buffer)
+			u = u_i + u_p
+
+			v = u + 1
+			delta_time = self.buffer_size_el
+			R_hat = np.minimum(v, delta_time/CHUNK_DURATION) * sniff_bw
+
+			if R_hat >= self.rate_cut[self.rate_cut_version][3]:
+				current_video_version = 3
+			elif R_hat >= self.rate_cut[self.rate_cut_version][2]:
+				current_video_version = 2
+			else:
+				current_video_version = 1
+			video_seg_index = self.video_seg_index_el
+			# print("el index is %s and version is %s, cause u: %s and delta_time: %s and sniff_bw: %s R_hat; %s" %\
+			# 	(self.video_seg_index_el, current_video_version, u, delta_time, sniff_bw, R_hat))
+		self.video_version = current_video_version
+		self.video_seg_index = video_seg_index
+		# print("going to download: %s at %s" %(self.video_version, self.video_seg_index))
+		return
+		
+	def update_seg_size(self):
+		#	based on whole video trace or rate cut
+		# self.video_seg_size = self.video_trace[self.video_version][self.video_seg_index]
+		self.video_seg_size = self.rate_cut[self.rate_cut_version][self.video_version]
+		return 
 
 	def fetching(self):
 		temp_video_display_time = self.display_time
@@ -158,7 +238,7 @@ class Streaming(object):
 				print("Current network time is %s, not integer" % self.network_time)
 			
 			self.buffer_size_bl -= first_sleep
-			self.video_bw_history.append([self.network_trace[self.network_ptr], self.network_time, -1, \
+			self.video_bw_history.append([self.network_trace[self.network_ptr]*BW_DALAY_RATIO, self.network_time, -1, \
 									self.rate_cut_version, self.network_trace[self.network_ptr]])
 			# print("after sleep, Current tiem is %s, and buffer length is %s, %s, is downloading %s" %(self.display_time, self.buffer_size_bl, self.buffer_size_el, self.video_version))
 			self.buffer_history.append([round(round(self.buffer_size_bl*100 + 2)/100), round(round(self.buffer_size_el*100 + 2)/100), self.display_time])
@@ -187,7 +267,7 @@ class Streaming(object):
 					print("el buffer is: %s, time is %s, " % (self.buffer_size_el, self.display_time))
 
 					self.buffer_size_bl -= CHUNK_DURATION
-					self.video_bw_history.append([self.network_trace[self.network_ptr], self.network_time, -1, \
+					self.video_bw_history.append([self.network_trace[self.network_ptr]*BW_DALAY_RATIO, self.network_time, -1, \
 											self.rate_cut_version, self.network_trace[self.network_ptr]])
 					# print("after sleep, Current tiem is %s, and buffer length is %s, %s, is downloading %s" %(self.display_time, self.buffer_size_bl, self.buffer_size_el, self.video_version))
 					self.buffer_history.append([round(round(self.buffer_size_bl*100 + 2)/100), round(round(self.buffer_size_el*100 + 2)/100), self.display_time])
@@ -345,65 +425,8 @@ class Streaming(object):
 			temp_buffer_size_bl = self.buffer_size_bl - final_time_left
 			temp_buffer_size_el = self.buffer_size_el - final_time_left
 			self.buffer_history.append([round(temp_buffer_size_bl*100)/100, round(temp_buffer_size_el*100)/100, np.ceil(self.display_time)])
-
 		return temp_video_display_time, recording_el
 
-	def calculate_alpha(self, buffer_range = BUFFER_RANGE):
-		# print("calculate alpha time is: %s" %self.display_time)
-		for i in range(np.minimum(buffer_range, len(self.alpha_history))):
-			# Calculate accuracy for each prediction
-			yaw_predict_value = self.alpha_history[-(i+1)][1][i][0]
-			yaw_predict_quan = self.alpha_history[-(i+1)][1][i][1]
-			pitch_predict_value = self.alpha_history[-(i+1)][1][i][2]
-			pitch_predict_quan = self.alpha_history[-(i+1)][1][i][3]
-
-			start_frame = int(self.display_time*VIDEO_FPS) - VIDEO_FPS
-			end_frame = int(self.display_time*VIDEO_FPS)
-			real_yaw_trace = self.yaw_trace[start_frame:end_frame]
-			real_pitch_trace = self.pitch_trace[start_frame:end_frame]
-			alpha_value = uti.cal_accuracy(yaw_predict_value, yaw_predict_quan, pitch_predict_value, pitch_predict_quan,\
-												real_yaw_trace, real_pitch_trace, 1.0, 'value')
-			self.alpha_history[-(i+1)][1][i][4] = alpha_value
-
-	def PI_control(self, sniff_bw):
-		current_video_version = -1
-		video_seg_index = -1
-		if self.buffer_size_bl < Q_REF_BL and self.video_seg_index_bl < VIDEO_LEN:
-			current_video_version = 0
-			video_seg_index = self.video_seg_index_bl
-
-		elif (self.buffer_size_bl >= Q_REF_BL and self.video_seg_index_el < VIDEO_LEN) \
-			or (self.video_seg_index_bl >= VIDEO_LEN and self.video_seg_index_el < VIDEO_LEN):
-			u_p = KP * (self.buffer_size_el - self.target_et_buffer)
-			u_i = 0
-			if len(self.buffer_history) != 0:
-				for index in range(1, np.minimum(PI_RANGE+1, len(self.buffer_history)+1)):
-					u_i += KI * (self.buffer_history[-index][1] - self.target_et_buffer)
-			u = u_i + u_p
-
-			v = u + 1
-			delta_time = self.buffer_size_el
-			R_hat = np.minimum(v, delta_time/CHUNK_DURATION) * sniff_bw
-
-			if R_hat >= self.rate_cut[self.rate_cut_version][3]:
-				current_video_version = 3
-			elif R_hat >= self.rate_cut[self.rate_cut_version][2]:
-				current_video_version = 2
-			else:
-				current_video_version = 1
-			video_seg_index = self.video_seg_index_el
-			# print("el index is %s and version is %s, cause u: %s and delta_time: %s and sniff_bw: %s R_hat; %s" %\
-			# 	(self.video_seg_index_el, current_video_version, u, delta_time, sniff_bw, R_hat))
-		self.video_version = current_video_version
-		self.video_seg_index = video_seg_index
-		# print("going to download: %s at %s" %(self.video_version, self.video_seg_index))
-		return
-		
-	def update_seg_size(self):
-		#	based on whole video trace or rate cut
-		# self.video_seg_size = self.video_trace[self.video_version][self.video_seg_index]
-		self.video_seg_size = self.rate_cut[self.rate_cut_version][self.video_version]
-		return 
 
 def main():
 	# network_trace = loadNetworkTrace(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)

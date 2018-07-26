@@ -27,12 +27,16 @@ Q_REF_BL = 10
 Q_REF_EL = 1
 ET_MAX_PRED = Q_REF_EL + 1
 
+# Chunk parameters
 CHUNK_DURATION = 1.0
+
 #Others
 KP = 0.6		# P controller
 KI = 0.01		# I controller
 PI_RANGE = 30
 DELAY = 0.02		# second
+
+BW_DALAY_RATIO = 0.95
 
 class Streaming(object):
 	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut):
@@ -131,7 +135,7 @@ class Streaming(object):
 			if not round(self.network_time, 3).is_integer():
 				print("Current network time is %s, not integer" % self.network_time)
 			self.buffer_size_bl -= sleep_time
-			self.video_bw_history.append([self.network_trace[self.network_ptr], self.network_time, -1, \
+			self.video_bw_history.append([self.network_trace[self.network_ptr]*BW_DALAY_RATIO, self.network_time, -1, \
 									self.rate_cut_version, self.network_trace[self.network_ptr]])
 			print("after sleep, Current tiem is %s, and buffer length is %s, %s, is downloading %s" %(self.display_time, self.buffer_size_bl, self.buffer_size_el, self.video_version))
 			self.buffer_history.append([round(round(self.buffer_size_bl*100 + 2)/100), round(round(self.buffer_size_el*100 + 2)/100), self.display_time])

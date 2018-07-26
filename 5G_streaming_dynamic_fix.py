@@ -36,6 +36,8 @@ DELAY = 0.02		# second
 
 # For alpha/gamma
 BUFFER_RANGE = 4
+BW_DALAY_RATIO = 0.95
+
 
 class Streaming(object):
 	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut):
@@ -67,6 +69,8 @@ class Streaming(object):
 		self.video_bw_history = []
 		self.video_version = 0
 		self.video_seg_index = 0
+		self.target_buffer_history = []
+		self.target_buffer_history.append(Q_REF_EL)
 
 		self.yaw_predict_value = 0.0
 		self.yaw_predict_quan = 0
@@ -92,13 +96,15 @@ class Streaming(object):
 				# adaptive rate allocation at fix frequency
 				if DO_DYNAMIC and int(np.floor(self.display_time/UPDATE_FREQUENCY)) != self.rate_cut_version:
 					self.alpha_history[-1][2] = self.rate_cut_version + 1
+					average_bw, var_bw, average_bw_real = uti.get_average_bw(self.display_time, self.video_bw_history, self.rate_cut_version)
 					new_rate_cut, new_target_et_buffer = uti.rate_optimize(self.display_time, \
-													self.video_bw_history, self.alpha_history,\
+													average_bw, var_bw, self.alpha_history,\
 													self.rate_cut_version)
 					self.rate_cut.append(new_rate_cut)
 					self.rate_cut_version += 1
 					self.target_et_buffer = new_target_et_buffer
 					self.upper_et_buffer = self.target_et_buffer + 1
+					self.target_buffer_history.append(new_target_et_buffer)
 				# Finish PI control
 				sniff_bw = uti.predict_bw(self.video_bw_history)
 				# self.bw_info = np.append(self.bw_info, [sniff_bw, self.network_time])
@@ -158,7 +164,7 @@ class Streaming(object):
 				print("Current network time is %s, not integer" % self.network_time)
 			
 			self.buffer_size_bl -= first_sleep
-			self.video_bw_history.append([self.network_trace[self.network_ptr], self.network_time, -1, \
+			self.video_bw_history.append([self.network_trace[self.network_ptr]*BW_DALAY_RATIO, self.network_time, -1, \
 									self.rate_cut_version, self.network_trace[self.network_ptr]])
 			# print("after sleep, Current tiem is %s, and buffer length is %s, %s, is downloading %s" %(self.display_time, self.buffer_size_bl, self.buffer_size_el, self.video_version))
 			self.buffer_history.append([round(round(self.buffer_size_bl*100 + 2)/100), round(round(self.buffer_size_el*100 + 2)/100), self.display_time])
@@ -187,7 +193,7 @@ class Streaming(object):
 					print("el buffer is: %s, time is %s, " % (self.buffer_size_el, self.display_time))
 
 					self.buffer_size_bl -= CHUNK_DURATION
-					self.video_bw_history.append([self.network_trace[self.network_ptr], self.network_time, -1, \
+					self.video_bw_history.append([self.network_trace[self.network_ptr]*BW_DALAY_RATIO, self.network_time, -1, \
 											self.rate_cut_version, self.network_trace[self.network_ptr]])
 					# print("after sleep, Current tiem is %s, and buffer length is %s, %s, is downloading %s" %(self.display_time, self.buffer_size_bl, self.buffer_size_el, self.video_version))
 					self.buffer_history.append([round(round(self.buffer_size_bl*100 + 2)/100), round(round(self.buffer_size_el*100 + 2)/100), self.display_time])
