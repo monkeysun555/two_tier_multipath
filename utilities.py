@@ -13,7 +13,7 @@ CHUNK_DURATION = 1.0
 # GAMMA_CAL_LEN is the length of calculating gamma, in seconds
 ALPHA_DYNAMIC = 1	# <======================= alpha control
 BUFFER_RANGE = 4
-ALPHA_CAL_LEN = 10
+ALPHA_CAL_LEN = 30
 GAMMA_CAL_LEN = 10
 BW_THRESHOLD = 0.2
 
@@ -61,6 +61,7 @@ def rate_optimize(display_time, average_bw, var_bw, alpha_history, version):
 	alpha_gamma = np.multiply(alpha_curve, gamma_curve)
 	optimal_alpha_gamma = np.amax(alpha_gamma)
 	optimal_buffer_len = np.argmax(alpha_gamma)
+	
 	beta = ((1 - optimal_alpha_gamma)*(ET_VER_SPAN*ET_HOR_SPAN))/ \
 			(optimal_alpha_gamma*(BT_VER_SPAN*BT_HOR_SPAN - ET_HOR_SPAN*ET_VER_SPAN))
 

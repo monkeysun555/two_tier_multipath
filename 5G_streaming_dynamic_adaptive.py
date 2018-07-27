@@ -229,7 +229,7 @@ class Streaming(object):
 				print("Two methods for sleep are not sync")
 
 			if round(self.video_seg_index_el - temp_video_display_time, 3) > round(self.buffer_size_el, 3) and self.buffer_size_el != 0:
-				self.buffer_size_el = np.maximum(self.buffer_size_el, np.maximum(self.video_seg_index_el - self.display_time, 0.0))
+				self.buffer_size_el = np.minimum(self.buffer_size_el, np.maximum(self.video_seg_index_el - self.display_time, 0.0))
 			else:
 				if round(self.video_seg_index_el - temp_video_display_time, 2) != round(self.buffer_size_el, 2)  :
 					print("not equal case 1",self.video_seg_index_el, temp_video_display_time, self.buffer_size_el)
