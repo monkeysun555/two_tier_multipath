@@ -1,21 +1,31 @@
 # To plot 5G bandwidth traces
 import matplotlib.pyplot as plt
 import numpy as np
+import utilities as uti
 
 VIDEO_LEN = 300
-filename_list = ['./traces/bandwidth/BW_Trace_5G_1.txt','./traces/bandwidth/BW_Trace_5G_2.txt'\
-					,'./traces/bandwidth/BW_Trace_5G_3.txt','./traces/bandwidth/BW_Trace_5G_4.txt'\
-					,'./traces/bandwidth/BW_Trace_5G_5.txt']
+filename_list = ['./traces/bandwidth/BW_Trace_5G_0.txt','./traces/bandwidth/BW_Trace_5G_1.txt'\
+					,'./traces/bandwidth/BW_Trace_5G_2.txt','./traces/bandwidth/BW_Trace_5G_2.txt'\
+					,'./traces/bandwidth/BW_Trace_5G_4.txt']
 ###############       Disturbed              Unstable          Stable   ################
 IS_SAVING = 0
 
 def main():
 	traces = []
 	for i in filename_list:
+		if i == './traces/bandwidth/BW_Trace_5G_2.txt':
+			multiple = 0.8
+			addition = 80
+		elif i == './traces/bandwidth/BW_Trace_5G_1.txt':
+			multiple = 1.7
+			addition = -520
+		else:
+			multiple = 1
+			addition = 0
 		with open(i) as f:
 			content = f.readlines()
 		# you may also want to remove whitespace characters like `\n` at the end of each line
-		content = [float(x.strip()) for x in content]
+		content = [multiple * float(x.strip()) + addition for x in content]
 		# print(content, len(content))
 		traces.append(content[:2*VIDEO_LEN])
 
@@ -23,7 +33,6 @@ def main():
 	x_value = []
 	for i in range(2,2*(VIDEO_LEN+1)):
 		x_value.append(float(i)/2.0)
-	
 	p = plt.figure(1, figsize=(20,5))
 	# plt.tight_layout()
 	# plt.plot(bw_result[1], bw_result[0],'b-',label='Predict Bandwidth')

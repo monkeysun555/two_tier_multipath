@@ -12,23 +12,34 @@ CHUNK_DURATION = 1.0
 # ALPHA_CAL_LEN is the length of calculating alpha, in seconds
 # GAMMA_CAL_LEN is the length of calculating gamma, in seconds
 ALPHA_DYNAMIC = 1	# <======================= alpha control
+IS_NON_LAYERED = 1  # <======================= whether it is non-layered coding
 BUFFER_RANGE = 4
-ALPHA_CAL_LEN = 30
+ALPHA_CAL_LEN = 300
 GAMMA_CAL_LEN = 10
 BW_THRESHOLD = 0.2
+ALPHA_AHEAD = 0.5
+
+ALPHA_CURVE = [[0.911, 0.870, 0.814, 0.771],\
+				[0.876, 0.728, 0.594, 0.534]]
+
+GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
+			   [0.883, 0.987, 1.0, 1.0],\
+			   [0.823, 0.942, 0.978, 1.0],\
+			   [0.780, 0.913, 0.970, 1.0],\
+			   [0.669, 0.797, 0.862, 0.893]]
 
 # Rate Allocation
 BITRATE_LEN = 4
-INIT_BL_RATIO = 0.1
-INIT_EL_RATIO = 0.9
-EL_LOWEST_RATIO = 0.75
-EL_HIGHER_RATIO = 1.25
+INIT_BL_RATIO = 0.3
+INIT_EL_RATIO = 0.7
+EL_LOWEST_RATIO = 0.8
+EL_HIGHER_RATIO = 1.2
 BW_UTI_RATIO = 0.85
 BW_DALAY_RATIO = 0.95
 
 # BW prediction
 BW_PRED_SAMPLE_SIZE = 10	# second
-INIT_BW = 30
+INIT_BW = 500
 
 # FOV prediction
 VIDEO_FPS = 30
@@ -54,19 +65,27 @@ R_BASE = 100.0
 FIGURE_NUM = 1
 SHOW_FIG = 1
 
-
-def rate_optimize(display_time, average_bw, var_bw, alpha_history, version):
-	gamma_curve = update_gamma(average_bw, var_bw)
-	alpha_curve = update_alpha(display_time, alpha_history, version)
+# 1 for layered_coding
+# 2 for non-layered coding
+def rate_optimize(display_time, average_bw, std_bw, alpha_history, version, fov_file, coding_type = 2):
+	gamma_curve = update_gamma(average_bw, std_bw)
+	alpha_curve = update_alpha(display_time, alpha_history, fov_file, version)
 	alpha_gamma = np.multiply(alpha_curve, gamma_curve)
 	optimal_alpha_gamma = np.amax(alpha_gamma)
 	optimal_buffer_len = np.argmax(alpha_gamma)
-	
-	beta = ((1 - optimal_alpha_gamma)*(ET_VER_SPAN*ET_HOR_SPAN))/ \
-			(optimal_alpha_gamma*(BT_VER_SPAN*BT_HOR_SPAN - ET_HOR_SPAN*ET_VER_SPAN))
 
-	rate_et_average = BW_UTI_RATIO*average_bw/ \
-					(1 + (BT_HOR_SPAN*BT_VER_SPAN*beta)/((1-beta)*ET_HOR_SPAN*ET_VER_SPAN))
+	if coding_type == 1:
+		beta = ((1 - optimal_alpha_gamma)*(ET_VER_SPAN*ET_HOR_SPAN))/ \
+				(optimal_alpha_gamma*(BT_VER_SPAN*BT_HOR_SPAN - ET_HOR_SPAN*ET_VER_SPAN))
+
+		rate_et_average = BW_UTI_RATIO*average_bw/ \
+						(1 + (BT_HOR_SPAN*BT_VER_SPAN*beta)/((1-beta)*ET_HOR_SPAN*ET_VER_SPAN))
+	elif coding_type == 2:
+		beta = ((1 - optimal_alpha_gamma)*(ET_VER_SPAN*ET_HOR_SPAN))/ \
+				(optimal_alpha_gamma*BT_VER_SPAN*BT_HOR_SPAN)
+		rate_et_average = BW_UTI_RATIO*average_bw/ \
+				(1 + ((BT_HOR_SPAN*BT_VER_SPAN*beta)/(ET_HOR_SPAN*ET_VER_SPAN)))
+
 	rate_bt_average = BW_UTI_RATIO*average_bw - rate_et_average
 	rate_et_low = rate_et_average * EL_LOWEST_RATIO
 	rate_et_high = rate_et_average * EL_HIGHER_RATIO
@@ -75,7 +94,7 @@ def rate_optimize(display_time, average_bw, var_bw, alpha_history, version):
 	print("Alpha is: ", alpha_curve)
 	print("Gamma is: ", gamma_curve)
 	print("alpha gamma is: ", alpha_gamma)
-	print("average bw is %s, rate_bt is: %s and rate_et is: %s" %(average_bw, rate_bt_average, rate_et_average))
+	print("average bw is %s, std is %s, rate_bt is: %s and rate_et is: %s" %(average_bw, std_bw, rate_bt_average, rate_et_average))
 	print("<++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++>")
 	print("<++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++>")
 	return [rate_bt_average, rate_et_low, rate_et_average, rate_et_high], optimal_buffer_len
@@ -83,11 +102,11 @@ def rate_optimize(display_time, average_bw, var_bw, alpha_history, version):
 
 def cal_average_bw(network_time, bw_history, last_ref_time):
 	average_gamma_bw = 0.0
-	variance_gamma_bw = 0.0
+	std_gamma_bw = 0.0
 	average_gamma_real = 0.0
 	if network_time - GAMMA_CAL_LEN < last_ref_time:
 		average_gamma_bw = -1.0
-		variance_gamma_bw = -1.0
+		std_gamma_bw = -1.0
 		average_gamma_real = -1.0
 	else:
 		ref_time = network_time - GAMMA_CAL_LEN
@@ -100,9 +119,9 @@ def cal_average_bw(network_time, bw_history, last_ref_time):
 				temp_bw.append(bw_history[i][0])
 				temp_real.append(bw_history[i][4])
 		average_gamma_bw = np.sum(temp_bw)/len(temp_bw)
-		variance_gamma_bw = np.var(temp_bw)/average_gamma_bw
+		std_gamma_bw = np.std(temp_bw)
 		average_gamma_real = np.sum(temp_real)/len(temp_real)
-	return average_gamma_bw, variance_gamma_bw, average_gamma_real
+	return average_gamma_bw, std_gamma_bw, average_gamma_real
 
 def is_bw_change(current_bw, ref_bw):
 	if current_bw >= (1+BW_THRESHOLD)*ref_bw or current_bw <= (1-BW_THRESHOLD)*ref_bw:
@@ -114,8 +133,8 @@ def record_alpha(yaw_trace, pitch_trace, display_time, buffer_range = BUFFER_RAN
 	temp_alpha_len = np.minimum(buffer_range, VIDEO_LEN - int(round(display_time)))
 	temp_alpha = [[0] * 5 for i in range(temp_alpha_len)]
 	for i in range(temp_alpha_len):
-		temp_yaw_value, temp_yaw_quan = predict_yaw_trun(yaw_trace, display_time-0.5, int(round(display_time)) + i)
-		temp_pitch_value, temp_pitch_quan = predict_pitch_trun(pitch_trace, display_time-0.5, int(round(display_time)) + i)
+		temp_yaw_value, temp_yaw_quan = predict_yaw_trun(yaw_trace, display_time - ALPHA_AHEAD, int(round(display_time)) + i)
+		temp_pitch_value, temp_pitch_quan = predict_pitch_trun(pitch_trace, display_time - ALPHA_AHEAD, int(round(display_time)) + i)
 		temp_alpha[i][0] = temp_yaw_value
 		temp_alpha[i][1] = temp_yaw_quan
 		temp_alpha[i][2] = temp_pitch_value
@@ -123,11 +142,15 @@ def record_alpha(yaw_trace, pitch_trace, display_time, buffer_range = BUFFER_RAN
 	return temp_alpha
 
 
-def update_gamma(average_bw, var_bw):
+def update_gamma(average_bw, std_bw):
 	# Fix gamma
-	return [0.747, 0.846, 0.903, 0.938]
+	current_std_mean_ratio = std_bw/average_bw
+	std_mean_ratios = [22.51/734.34, 85.92/722.80, 154.81/719.03, 206.73/659.67, 277.10/585.31]
+	std_mean_array = np.asarray(std_mean_ratios)
+	idx = (np.abs(std_mean_array - current_std_mean_ratio)).argmin()
+	return GAMMA_CURVE[idx]
 
-def update_alpha(display_time, alpha_history, version, buffer_range = BUFFER_RANGE):
+def update_alpha(display_time, alpha_history, version, fov_file, buffer_range = BUFFER_RANGE):
 	alpha = [0.0]*buffer_range
 	if ALPHA_DYNAMIC:
 		alpha_calculation_len = 0
@@ -137,9 +160,10 @@ def update_alpha(display_time, alpha_history, version, buffer_range = BUFFER_RAN
 			alpha_calculation_len += 1	
 
 		alpha_calculation_len = np.minimum(alpha_calculation_len, ALPHA_CAL_LEN)
+		# alpha_calculation_len = np.minimum(len(alpha_history)-BUFFER_RANGE, ALPHA_CAL_LEN)
 		# print("alpha_history is: ", alpha_history, alpha_calculation_len)
 		assert alpha_calculation_len >= 1
-		if version > 0:
+		if version > 0 and alpha_calculation_len >= ALPHA_CAL_LEN:	# 100 means will not triggered; if set to "0", change calculation of alpha_calculation_len to upper one
 			for i in range(buffer_range):
 				temp_alpha = 0.0
 				temp_alpha_count = 0
@@ -151,18 +175,26 @@ def update_alpha(display_time, alpha_history, version, buffer_range = BUFFER_RAN
 				else:
 					alpha[i] = temp_alpha/temp_alpha_count
 		else:
-			for i in range(buffer_range):
-				temp_alpha = 0.0
-				temp_alpha_count = 0
-				for j in range(alpha_calculation_len-i):
-					temp_alpha += alpha_history[-(j+i+2)][1][i][4]
-					temp_alpha_count += 1
-				if temp_alpha_count == 0:
-					alpha[i] = 0.0
-				else:
-					alpha[i] = temp_alpha/temp_alpha_count
+			# Version 1
+			# for i in range(buffer_range):
+			# 	temp_alpha = 0.0
+			# 	temp_alpha_count = 0
+			# 	for j in range(alpha_calculation_len-i):
+			# 		temp_alpha += alpha_history[-(j+i+2)][1][i][4]
+			# 		temp_alpha_count += 1
+			# 	if temp_alpha_count == 0:
+			# 		alpha[i] = 0.0
+			# 	else:
+			# 		alpha[i] = temp_alpha/temp_alpha_count
+
+			# Version 2
+			if fov_file == './traces/output/Video_9_alpha_beta_new.mat':
+				alpha = [0.911, 0.870, 0.814, 0.771]
+			elif fov_file == './traces/output/Video_13_alpha_beta_new.mat':
+				alpha = [0.876, 0.728, 0.594, 0.534]
+
 	else:
-		alpha = [0.942, 0.896, 0.865, 0.825]
+		alpha = [0.911, 0.870, 0.814, 0.771]
 	
 	return alpha
 
@@ -177,7 +209,7 @@ def get_average_bw(display_time, bw_history, version):
 		else:
 			break
 	average_bw = np.sum(bw_record)/len(bw_record)
-	return average_bw, np.var(bw_record)/average_bw, np.sum(bw_real)/len(bw_real) 
+	return average_bw, np.std(bw_record), np.sum(bw_real)/len(bw_real) 
 
 
 def show_network(network_trace):
@@ -194,12 +226,37 @@ def show_network(network_trace):
 	# print("5G delay median:", np.median(network_delay))
 	return np.mean(network_trace)
 
-def load_init_rates(average_bw):
-	rate_cut = [0.0] * BITRATE_LEN
-	rate_cut[0] = INIT_BL_RATIO * BW_UTI_RATIO * average_bw
-	rate_cut[1] = INIT_EL_RATIO * EL_LOWEST_RATIO * BW_UTI_RATIO * average_bw
-	rate_cut[2] = INIT_EL_RATIO * BW_UTI_RATIO * average_bw
-	rate_cut[3] = INIT_EL_RATIO * EL_HIGHER_RATIO * BW_UTI_RATIO * average_bw
+def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate_gamma = True):
+	if not calculate_gamma:
+		rate_cut = [0.0] * BITRATE_LEN
+		rate_cut[0] = INIT_BL_RATIO * BW_UTI_RATIO * average_bw
+		rate_cut[1] = INIT_EL_RATIO * EL_LOWEST_RATIO * BW_UTI_RATIO * average_bw
+		rate_cut[2] = INIT_EL_RATIO * BW_UTI_RATIO * average_bw
+		rate_cut[3] = INIT_EL_RATIO * EL_HIGHER_RATIO * BW_UTI_RATIO * average_bw
+		print(rate_cut)
+	else:
+		alpha_index = 0
+		gamma_index = 0
+		if fov_file == './traces/output/Video_9_alpha_beta_new.mat':
+			alpha_index = 0
+		elif fov_file == './traces/output/Video_13_alpha_beta_new.mat':
+			alpha_index = 1
+
+		if video_file == './traces/bandwidth/BW_Trace_5G_0.txt':
+			gamma_index = 0
+		elif video_file == './traces/bandwidth/BW_Trace_5G_1.txt':
+			gamma_index = 1
+		elif video_file == './traces/bandwidth/BW_Trace_5G_2.txt':
+			gamma_index = 2
+		elif video_file == './traces/bandwidth/BW_Trace_5G_3.txt':
+			gamma_index = 3
+		elif video_file == './traces/bandwidth/BW_Trace_5G_4.txt':
+			gamma_index = 4
+
+		alpha_curve = ALPHA_CURVE[alpha_index]
+		gamma_curve = GAMMA_CURVE[gamma_index]
+
+		rate_cut = calculate_rate_cute_non_layer(average_bw, alpha_curve, gamma_curve, coding_type)
 	return rate_cut
 
 def generate_video_trace(rate_cut):
@@ -367,7 +424,7 @@ def cal_accuracy(pred_yaw_value, pred_yaw_quan, pred_pitch_value, pred_pitch_qua
 	area_accuracy = yaw_eff * pitch_eff
 	return area_accuracy
 
-def show_rates(streaming):
+def show_rates(streaming, coding_type = 2):
 	# For video rate
 	receive_bitrate = [0.0]*VIDEO_LEN
 	display_bitrate = [0.0]*VIDEO_LEN
@@ -376,46 +433,80 @@ def show_rates(streaming):
 	total_gamma = 0.0	# chunk pass ratio
 	bl_info = streaming.evr_bl_recordset
 	el_info = streaming.evr_el_recordset
-
 	# <update> later
 	rate_cut = streaming.rate_cut
 
-	for i in range(BUFFER_BL_INIT):
-		display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
-		receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+	if coding_type == 1:
+		for i in range(BUFFER_BL_INIT):
+			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+			receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
 
-	for i in range(BUFFER_EL_INIT):
-		display_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
-		receive_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
+		for i in range(BUFFER_EL_INIT):
+			display_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
+			receive_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
 
-	for i in range(len(bl_info)):
-		display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
-		receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+		for i in range(len(bl_info)):
+			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+			receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
 
-	for i in range(len(el_info)):
-		time_eff = el_info[i][9]
-		start_frame_index = int((1 - time_eff + el_info[i][0])*VIDEO_FPS)
-		end_frame_index = int((1 + el_info[i][0])*VIDEO_FPS)
+		for i in range(len(el_info)):
+			time_eff = el_info[i][9]
+			start_frame_index = int((1 - time_eff + el_info[i][0])*VIDEO_FPS)
+			end_frame_index = int((1 + el_info[i][0])*VIDEO_FPS)
 
-		quan_yaw = el_info[i][5]
-		real_yaw = el_info[i][6]
-		real_yaw_trace = streaming.yaw_trace[start_frame_index:end_frame_index]
-		quan_pitch = el_info[i][7]
-		real_pitch = el_info[i][8]
-		real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
+			quan_yaw = el_info[i][5]
+			real_yaw = el_info[i][6]
+			real_yaw_trace = streaming.yaw_trace[start_frame_index:end_frame_index]
+			quan_pitch = el_info[i][7]
+			real_pitch = el_info[i][8]
+			real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
 
-		el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
-		if time_eff == 0:
-			assert el_accuracy == 0
-		receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
-		display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
-		total_alpha += el_accuracy
-		total_gamma += time_eff
+			el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
+			if time_eff == 0:
+				assert el_accuracy == 0
+			receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
+			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
+			total_alpha += el_accuracy
+			total_gamma += time_eff
+	elif coding_type == 2:
+		for i in range(BUFFER_BL_INIT):
+			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+			receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
 
+		for i in range(BUFFER_EL_INIT):
+			display_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
+			receive_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
+
+		for i in range(len(bl_info)):
+			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+			receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+
+		for i in range(len(el_info)):
+			time_eff = el_info[i][9]
+			start_frame_index = int((1 - time_eff + el_info[i][0])*VIDEO_FPS)
+			end_frame_index = int((1 + el_info[i][0])*VIDEO_FPS)
+
+			quan_yaw = el_info[i][5]
+			real_yaw = el_info[i][6]
+			real_yaw_trace = streaming.yaw_trace[start_frame_index:end_frame_index]
+			quan_pitch = el_info[i][7]
+			real_pitch = el_info[i][8]
+			real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
+
+			el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
+			if time_eff == 0:
+				assert el_accuracy == 0
+			receive_bitrate[el_info[i][0]] = 0
+			receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
+
+			display_bitrate[el_info[i][0]] -= time_eff * el_accuracy * display_bitrate[el_info[i][0]]
+			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
+			total_alpha += el_accuracy
+			total_gamma += time_eff
 
 	for i in range(len(display_bitrate)):
 		if display_bitrate[i] == 0.0:
-			print("cannot be like this")
+			print("cannot be like this at %s" % i)
 			continue
 		log_bitrate[i] += math.log10(display_bitrate[i]/R_BASE)
 
@@ -451,10 +542,12 @@ def show_rates(streaming):
 def show_buffer(streaming):
 	## Plot buffer length
 	buffer_info = streaming.buffer_history
+	# print(len(buffer_info))
+	# print(buffer_info)
 	if np.ceil(streaming.display_time) < VIDEO_LEN:
 		time_to_end = VIDEO_LEN - int(np.ceil(streaming.display_time))
 		for i in range(time_to_end):
-			buffer_info.append([ np.maximum(buffer_info[-1][0]-1, 0),  np.maximum(buffer_info[-1][1]-1, 0), buffer_info[-1][2]+i+1])
+			buffer_info.append([ np.maximum(buffer_info[-1][0]-1, 0),  np.maximum(buffer_info[-1][1]-1, 0), buffer_info[-1][2]+1])
 	# print(buffer_info)
 	# print(streaming.display_time)
 	# print(len(buffer_info))
@@ -476,13 +569,12 @@ def show_buffer(streaming):
 	plt.yticks(np.arange(0, 21, 5))
 	plt.gcf().subplots_adjust(bottom=0.20, left=0.085, right=0.97)	
 	plt.axis([0, 300, 0, 20])
-
 	return a 
 
 def show_bw(streaming):
 	for i in range(len(streaming.video_bw_history)):
 		print("Bw at %s is %s and real is %s.\n" % (streaming.video_bw_history[i][1], \
-									streaming.video_bw_history[i][0], streaming.video_bw_history[i][4]))
+		streaming.video_bw_history[i][0], streaming.video_bw_history[i][4]))
 	
 
 def show_figure(figures):
@@ -490,12 +582,12 @@ def show_figure(figures):
 		f.show()
 	raw_input()
 
-def show_result(streaming):
+def show_result(streaming, coding_type):
 	# record figures
 	figures = []
 	figures.append(show_buffer(streaming))
 	#	display and received bitrates
-	figures.append(show_rates(streaming))
+	figures.append(show_rates(streaming, coding_type))
 
 	# show_bw(streaming)
 
@@ -504,7 +596,39 @@ def show_result(streaming):
 	
 	if SHOW_FIG:
 		show_figure(figures)
-
-
 	return
+
+def calculate_rate_cute_non_layer(average_bw, alpha_curve, gamma_curve, coding_type = 2):
+	# for non-layered coding
+	# Change gamma to get rate optimization
+
+	alpha_gamma = np.multiply(alpha_curve, gamma_curve)
+	optimal_alpha_gamma = np.amax(alpha_gamma)
+	optimal_buffer_len = np.argmax(alpha_gamma)
+
+	if coding_type == 1:
+		beta = ((1 - optimal_alpha_gamma)*(ET_VER_SPAN*ET_HOR_SPAN))/ \
+				(optimal_alpha_gamma*(BT_VER_SPAN*BT_HOR_SPAN - ET_HOR_SPAN*ET_VER_SPAN))
+
+		rate_et_average = BW_UTI_RATIO*average_bw/ \
+						(1 + (BT_HOR_SPAN*BT_VER_SPAN*beta)/((1-beta)*ET_HOR_SPAN*ET_VER_SPAN))
+	elif coding_type == 2:
+		beta = ((1 - optimal_alpha_gamma)*(ET_VER_SPAN*ET_HOR_SPAN))/ \
+				(optimal_alpha_gamma*BT_VER_SPAN*BT_HOR_SPAN)
+		rate_et_average = BW_UTI_RATIO*average_bw/ \
+				(1 + ((BT_HOR_SPAN*BT_VER_SPAN*beta)/(ET_HOR_SPAN*ET_VER_SPAN)))
+
+	rate_bt_average = BW_UTI_RATIO*average_bw - rate_et_average
+	rate_et_low = rate_et_average * EL_LOWEST_RATIO
+	rate_et_high = rate_et_average * EL_HIGHER_RATIO
+	print("Alpha is: ", alpha_curve)
+	print("Gamma is: ", gamma_curve)
+	print("alpha gamma is: ", alpha_gamma)
+	print("optimal buffer length is: %s" %optimal_buffer_len)
+	print("Beta is: %s" % beta)
+	print("average bw is %s, rate_bt is: %s and rate_et is: %s" %(average_bw, rate_bt_average, rate_et_average))
+	print("Rate cute is: %s" % ([rate_bt_average, rate_et_low, rate_et_average, rate_et_high]))
+	return [rate_bt_average, rate_et_low, rate_et_average, rate_et_high]
+
+
 
