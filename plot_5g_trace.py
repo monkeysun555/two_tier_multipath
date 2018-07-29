@@ -5,10 +5,10 @@ import utilities as uti
 
 VIDEO_LEN = 300
 filename_list = ['./traces/bandwidth/BW_Trace_5G_0.txt','./traces/bandwidth/BW_Trace_5G_1.txt'\
-					,'./traces/bandwidth/BW_Trace_5G_2.txt','./traces/bandwidth/BW_Trace_5G_2.txt'\
+					,'./traces/bandwidth/BW_Trace_5G_2.txt','./traces/bandwidth/BW_Trace_5G_3.txt'\
 					,'./traces/bandwidth/BW_Trace_5G_4.txt']
 ###############       Disturbed              Unstable          Stable   ################
-IS_SAVING = 0
+IS_SAVING = 1
 
 def main():
 	traces = []
@@ -113,7 +113,7 @@ def main():
 	# plt.tight_layout()
 	# plt.plot(bw_result[1], bw_result[0],'b-',label='Predict Bandwidth')
 	# plt.plot(range(1,VIDEO_LEN+1), traces[1],'r-', label='Partially Disturbed', linewidth=2.0)
-	plt.plot(x_value, traces[3], color='cornflowerblue', label='Disturbed', linewidth=2.5)
+	plt.plot(x_value, traces[3], color='plum', label='Disturbed', linewidth=2.5)
 	# plt.plot(range(1,VIDEO_LEN+1), traces[i],'r-', label='Real-time Bandwidth', linewidth='1.2')
 
 	### for plot gamma
@@ -137,7 +137,7 @@ def main():
 	# plt.tight_layout()
 	# plt.plot(bw_result[1], bw_result[0],'b-',label='Predict Bandwidth')
 	# plt.plot(range(1,VIDEO_LEN+1), traces[1],'r-', label='Partially Disturbed', linewidth=2.0)
-	plt.plot(x_value, traces[4], color='cornflowerblue', label='Disturbed', linewidth=2.5)
+	plt.plot(x_value, traces[4], color='olive', label='Disturbed', linewidth=2.5)
 	# plt.plot(range(1,VIDEO_LEN+1), traces[i],'r-', label='Real-time Bandwidth', linewidth='1.2')
 
 	### for plot gamma
@@ -166,9 +166,11 @@ def main():
 	raw_input()
 
 	if IS_SAVING:
-		p.savefig('5G_disturb.eps', format='eps', dpi=1000, figsize=(30, 10))
-		q.savefig('5G_unstable.eps', format='eps', dpi=1000, figsize=(30, 10))
-		r.savefig('5G_stable.eps', format='eps', dpi=1000, figsize=(30, 10))
+		p.savefig('./figures/5g/5G_1.eps', format='eps', dpi=1000, figsize=(30, 10))
+		q.savefig('./figures/5g/5g_2.eps', format='eps', dpi=1000, figsize=(30, 10))
+		q.savefig('./figures/5g/5g_3.eps', format='eps', dpi=1000, figsize=(30, 10))
+		r.savefig('./figures/5g/5g_4.eps', format='eps', dpi=1000, figsize=(30, 10))
+		s.savefig('./figures/5g/5g_5.eps', format='eps', dpi=1000, figsize=(30, 10))
 
 
 if __name__ == '__main__':
