@@ -428,7 +428,8 @@ def cal_accuracy(pred_yaw_value, pred_yaw_quan, pred_pitch_value, pred_pitch_qua
 def generate_360_rate():
 	return [100, 250, 400, 550, 700, 850]
 
-
+def generate_fov_rate():
+	return [100, 250, 400, 550, 700, 850]
 
 
 # show results

@@ -113,7 +113,7 @@ class Streaming(object):
 				self.PI_control(sniff_bw)
 				self.update_seg_size()
 			
-				temp_index = self.video_seg_index
+				# temp_index = self.video_seg_index
 				if self.video_version != 0:
 					assert self.video_version != -1
 					self.yaw_predict_value, self.yaw_predict_quan = uti.predict_yaw_trun(self.yaw_trace, self.display_time, self.video_seg_index)

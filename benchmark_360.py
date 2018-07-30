@@ -36,6 +36,7 @@ class Streaming(object):
 		self.network_time = 0.0
 		self.display_time = 0.0
 
+		self.video_version = 0
 		self.video_seg_index = BUFFER_INIT
 		self.buffer_size = BUFFER_INIT
 		self.buffer_history = []
@@ -71,6 +72,7 @@ class Streaming(object):
 							self.network_time = 0.0
 						self.network_time += temp_delay
 						duration = self.network_ptr + 1.0 - self.network_time
+						throughput = self.network_trace[self.network_ptr]
 					count_delay = 1
 
 				payload = throughput * duration
@@ -100,9 +102,9 @@ class Streaming(object):
 			self.buffer_size = np.maximum(self.buffer_size - delay, 0.0)
 			self.buffer_size += CHUNK_DURATION
 			if len(self.video_bw_history) == 0:
-				bw = self.video_chunk_size/self.network_time
+				bw = self.video_chunk_size/(self.network_time - DELAY)
 			else:
-				bw = self.video_chunk_size/(self.network_time-self.video_bw_history[-1][1])
+				bw = self.video_chunk_size/(self.network_time-self.video_bw_history[-1][1] - DELAY)
 			self.video_bw_history.append([bw, self.network_time])
 			print("before sleep, network time is %s,%s display time is %s and buffer is %s" %(self.network_time,\
 					self.network_ptr, self.display_time, self.buffer_size))
