@@ -10,6 +10,13 @@ FILE_LIST = ['./traces/bandwidth/BW_Trace_5G_0.txt','./traces/bandwidth/BW_Trace
 					,'./traces/bandwidth/BW_Trace_5G_4.txt']
 # NETWORK_TRACE_LEN = VIDEO_LEN + 100 		# For two-tier multipath and vp only
 def load_5G_Data(fname, multiple=1, addition=0):
+	if fname == './traces/bandwidth/BW_Trace_5G_1.txt':
+		multiple = 1.7
+		addition = -520
+	elif fname == './traces/bandwidth/BW_Trace_5G_2.txt':
+		multiple = 0.8
+		addition = 80
+		
 	with open(fname) as f:
 		content = f.readlines()
 	# you may also want to remove whitespace characters like `\n` at the end of each line

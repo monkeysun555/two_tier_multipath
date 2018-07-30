@@ -424,6 +424,14 @@ def cal_accuracy(pred_yaw_value, pred_yaw_quan, pred_pitch_value, pred_pitch_qua
 	area_accuracy = yaw_eff * pitch_eff
 	return area_accuracy
 
+
+def generate_360_rate():
+	return [100, 250, 400, 550, 700, 850]
+
+
+
+
+# show results
 def show_rates(streaming, coding_type = 2):
 	# For video rate
 	receive_bitrate = [0.0]*VIDEO_LEN
