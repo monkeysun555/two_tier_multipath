@@ -158,19 +158,53 @@ def main():
 	plt.grid(linestyle='dashed', axis='y',linewidth=1.5, color='gray')
 
 
-	p.show()
-	q.show()
-	r.show()
-	s.show()
-	t.show()
+	u = plt.figure(6, figsize=(20,5))
+	# plt.tight_layout()
+	# plt.plot(bw_result[1], bw_result[0],'b-',label='Predict Bandwidth')
+	# plt.plot(range(1,VIDEO_LEN+1), traces[1],'r-', label='Partially Disturbed', linewidth=2.0)
+	plt.plot(x_value, traces[0], color='blue', label='BW Trace 1', linewidth=1.5,alpha=0.9)
+	# plt.plot(x_value, traces[1], color='red', label='Disturbed', linewidth=1.5, alpha=0.9)
+	# plt.plot(x_value, traces[2], color='red',label='BW Trace 3', linewidth=1.5, alpha=0.9)
+	# plt.plot(x_value, traces[3], color='red', label='BW Trace 4', linewidth=1.5, alpha=0.9)
+	plt.plot(x_value, traces[4], color='red', label='BW Trace 5', linewidth=1.5, alpha=0.7)
+
+	# plt.plot(range(1,VIDEO_LEN+1), traces[i],'r-', label='Real-time Bandwidth', linewidth='1.2')
+
+	### for plot gamma
+	# plt.plot(range(1,VIDEO_LEN+1), network_trace,'r-',label='Average:690.7 Mbps  Peak: 885.07 Mbps  std:211.1')
+	######
+	# plt.plot(range(1,VIDEO_LEN+1), network_trace_aux[:VIDEO_LEN],'r-',label='5G Bandwidth', linewidth = 1)
+	plt.legend(loc='upper right',fontsize=24)
+	# plt.title('Bandwidth Predict and Real Trace')
+	# plt.title('5G Throughput Trace')
+	plt.xlabel('Second', fontsize=30)
+	plt.ylabel('Mbps', fontsize=30)
+	plt.tick_params(axis='both', which='major', labelsize=30)
+	plt.tick_params(axis='both', which='minor', labelsize=30)
+	plt.axis([0, VIDEO_LEN, 0, 1800])
+	plt.xticks(np.arange(0, VIDEO_LEN+1, 50))
+	plt.yticks(np.arange(200, 1000+1, 200))
+	plt.gcf().subplots_adjust(bottom=0.20, left=0.095,right=0.97)	
+	plt.grid(linestyle='dashed', axis='y',linewidth=1.5, color='gray')
+
+
+
+
+	# p.show()
+	# q.show()
+	# r.show()
+	# s.show()
+	# t.show()
+	u.show()
 	raw_input()
 
 	if IS_SAVING:
-		p.savefig('./figures/5g/5G_1.eps', format='eps', dpi=1000, figsize=(30, 10))
-		q.savefig('./figures/5g/5g_2.eps', format='eps', dpi=1000, figsize=(30, 10))
-		q.savefig('./figures/5g/5g_3.eps', format='eps', dpi=1000, figsize=(30, 10))
-		r.savefig('./figures/5g/5g_4.eps', format='eps', dpi=1000, figsize=(30, 10))
-		s.savefig('./figures/5g/5g_5.eps', format='eps', dpi=1000, figsize=(30, 10))
+		# p.savefig('./figures/5g/5G_1.eps', format='eps', dpi=1000, figsize=(30, 10))
+		# q.savefig('./figures/5g/5g_2.eps', format='eps', dpi=1000, figsize=(30, 10))
+		# q.savefig('./figures/5g/5g_3.eps', format='eps', dpi=1000, figsize=(30, 10))
+		# r.savefig('./figures/5g/5g_4.eps', format='eps', dpi=1000, figsize=(30, 10))
+		# s.savefig('./figures/5g/5g_5.eps', format='eps', dpi=1000, figsize=(30, 10))
+		u.savefig('./figures/5g/5g_agg.eps', format='eps', dpi=1000, figsize=(30, 10))
 
 
 if __name__ == '__main__':

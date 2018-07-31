@@ -14,7 +14,7 @@ CHUNK_DURATION = 1.0
 ALPHA_DYNAMIC = 1	# <======================= alpha control
 IS_NON_LAYERED = 1  # <======================= whether it is non-layered coding
 BUFFER_RANGE = 4
-ALPHA_CAL_LEN = 300
+ALPHA_CAL_LEN = 30
 GAMMA_CAL_LEN = 10
 BW_THRESHOLD = 0.2
 ALPHA_AHEAD = 0.5
@@ -28,6 +28,8 @@ GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
 			   [0.780, 0.913, 0.970, 1.0],\
 			   [0.669, 0.797, 0.862, 0.893]]
 
+BT_RATES = [10,30,50,80,120,160,200]
+ET_RATES = [300, 350, 400, 450, 500, 550, 600, 650, 700]
 # Rate Allocation
 BITRATE_LEN = 4
 INIT_BL_RATIO = 0.3
@@ -89,15 +91,20 @@ def rate_optimize(display_time, average_bw, std_bw, alpha_history, version, fov_
 	rate_bt_average = BW_UTI_RATIO*average_bw - rate_et_average
 	rate_et_low = rate_et_average * EL_LOWEST_RATIO
 	rate_et_high = rate_et_average * EL_HIGHER_RATIO
+
+	rate_cuts = quantize_bt_et_rate(average_bw, rate_bt_average, rate_et_low, rate_et_average, rate_et_high)
+
 	#update rate cut and rate cut version
 	print("Do a optimzation, current time is %s" % display_time)
 	print("Alpha is: ", alpha_curve)
 	print("Gamma is: ", gamma_curve)
 	print("alpha gamma is: ", alpha_gamma)
 	print("average bw is %s, std is %s, rate_bt is: %s and rate_et is: %s" %(average_bw, std_bw, rate_bt_average, rate_et_average))
+	print("Rate cute is: %s" % rate_cuts)
 	print("<++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++>")
 	print("<++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++>")
-	return [rate_bt_average, rate_et_low, rate_et_average, rate_et_high], optimal_buffer_len
+	# return [rate_bt_average, rate_et_low, rate_et_average, rate_et_high], optimal_buffer_len
+	return rate_cuts, optimal_buffer_len
 
 
 def cal_average_bw(network_time, bw_history, last_ref_time):
@@ -607,6 +614,29 @@ def show_result(streaming, coding_type):
 		show_figure(figures)
 	return
 
+def quantize_bt_et_rate(ave_bw, bt, et1, et2, et3):
+	if bt < BT_RATES[0] or bt > BT_RATES[-1] or et2 < ET_RATES[0] or et2 > ET_RATES[-1]:
+		print("out of range")
+	bt_budget = 0
+	bt_array = np.asarray(BT_RATES)
+	et_array = np.asarray(ET_RATES)
+	idx_bt = (np.abs(bt_array - bt)).argmin()
+	bt_budget = bt - BT_RATES[idx_bt]
+
+	et_ave = et2 + bt_budget
+	et_low = et_ave * EL_LOWEST_RATIO
+	et_high = et_ave * EL_HIGHER_RATIO
+
+	idx_et2 = (np.abs(et_array - et_ave)).argmin()
+	idx_et1 = (np.abs(et_array - et_low)).argmin()
+	idx_et3 = (np.abs(et_array - et_high)).argmin()
+	if idx_et1 == idx_et2 or idx_et2 == idx_et3:
+		print("et out of range, should modify")
+	if np.abs(idx_et1 - idx_et2) <= 1 or np.abs(idx_et2 - idx_et3) <= 1:
+		print("et idx too close, should modify")
+
+	return [BT_RATES[idx_bt], ET_RATES[idx_et1], ET_RATES[idx_et2], ET_RATES[idx_et3]]
+
 def calculate_rate_cute_non_layer(average_bw, alpha_curve, gamma_curve, coding_type = 2):
 	# for non-layered coding
 	# Change gamma to get rate optimization
@@ -630,14 +660,17 @@ def calculate_rate_cute_non_layer(average_bw, alpha_curve, gamma_curve, coding_t
 	rate_bt_average = BW_UTI_RATIO*average_bw - rate_et_average
 	rate_et_low = rate_et_average * EL_LOWEST_RATIO
 	rate_et_high = rate_et_average * EL_HIGHER_RATIO
+
+	rate_cuts = quantize_bt_et_rate(average_bw, rate_bt_average, rate_et_low, rate_et_average, rate_et_high)
 	print("Alpha is: ", alpha_curve)
 	print("Gamma is: ", gamma_curve)
 	print("alpha gamma is: ", alpha_gamma)
 	print("optimal buffer length is: %s" %optimal_buffer_len)
 	print("Beta is: %s" % beta)
 	print("average bw is %s, rate_bt is: %s and rate_et is: %s" %(average_bw, rate_bt_average, rate_et_average))
-	print("Rate cute is: %s" % ([rate_bt_average, rate_et_low, rate_et_average, rate_et_high]))
-	return [rate_bt_average, rate_et_low, rate_et_average, rate_et_high]
+	print("Rate cute is: %s" % rate_cuts)
+	# return [rate_bt_average, rate_et_low, rate_et_average, rate_et_high]
+	return rate_cuts, optimal_buffer_len
 
 
 

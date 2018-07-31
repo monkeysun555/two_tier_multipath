@@ -43,7 +43,7 @@ BW_DALAY_RATIO = 0.95
 
 
 class Streaming(object):
-	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut):
+	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut, optimal_buffer_length):
 		self.network_trace = network_trace
 		self.yaw_trace = yaw_trace
 		self.pitch_trace = pitch_trace
@@ -62,8 +62,11 @@ class Streaming(object):
 		self.buffer_size_bl = BUFFER_BL_INIT
 		self.buffer_size_el = BUFFER_EL_INIT
 		self.buffer_history = []
-		self.target_et_buffer = Q_REF_EL
-		self.upper_et_buffer = ET_MAX_PRED
+		if not DO_DYNAMIC:
+			self.target_et_buffer = Q_REF_EL
+		else:
+			self.target_et_buffer = optimal_buffer_length
+		self.upper_et_buffer = self.target_et_buffer + 1
 
 		self.download_partial = 0
 		self.video_seg_size = 0.0
@@ -458,10 +461,10 @@ def main():
 	average_bw = uti.show_network(network_trace)
 	yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW)
 
-	init_video_rate = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)
+	init_video_rate, optimal_buffer_length = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)
 	video_trace = uti.generate_video_trace(init_video_rate)
 
-	streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate)
+	streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate, optimal_buffer_length)
 		
 	streaming_sim.run()
 
