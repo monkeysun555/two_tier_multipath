@@ -14,7 +14,13 @@ VIDEO_LEN = 300
 VIDEO_FPS = 30
 UPDATE_FREQUENCY = 30
 # BW trace
-REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_0.txt'  
+REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_5.txt'  
+
+# Don't change following -----------------------------------------------#
+if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':		#
+	VIDEO_LEN = 450														#
+# Don't change following -----------------------------------------------#
+
 # DELAY_TRACE = 'delay_1.txt'
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
@@ -31,7 +37,7 @@ ET_MAX_PRED = Q_REF_EL + 2
 CHUNK_DURATION = 1.0
 #Others
 KP = 0.6		# P controller
-KI = 0.01		# I controller
+KI = 0.05		# I controller
 PI_RANGE = 30
 DELAY = 0.01		# second
 PI_SMOOTH = 1
@@ -42,7 +48,11 @@ BW_DALAY_RATIO = 0.95
 
 
 class Streaming(object):
-	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut, optimal_buffer_length):
+	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut, optimal_buffer_length, alpha_idx, gamma_idx):
+		self.dy_type = 'fix'
+		self.fov_file = alpha_idx
+		self.network_file = gamma_idx
+		self.dynamic = DO_DYNAMIC
 		self.network_trace = network_trace
 		self.yaw_trace = yaw_trace
 		self.pitch_trace = pitch_trace
@@ -100,6 +110,7 @@ class Streaming(object):
 			if not self.download_partial:
 				# adaptive rate allocation at fix frequency
 				if DO_DYNAMIC and int(np.floor(self.display_time/UPDATE_FREQUENCY)) != self.rate_cut_version:
+					# print("optimization, current network ptr is: %s, display_time: %s" % (self.network_ptr, self.display_time))
 					self.alpha_history[-1][2] = self.rate_cut_version + 1
 					average_bw, std_bw, average_bw_real = uti.get_average_bw(self.display_time, self.video_bw_history, self.rate_cut_version)
 					new_rate_cut, new_target_et_buffer = uti.rate_optimize(self.display_time, \
@@ -122,7 +133,8 @@ class Streaming(object):
 					self.yaw_predict_value, self.yaw_predict_quan = uti.predict_yaw_trun(self.yaw_trace, self.display_time, self.video_seg_index)
 					self.pitch_predict_value, self.pitch_predict_quan = uti.predict_pitch_trun(self.pitch_trace, self.display_time, self.video_seg_index)
 			previous_time, recording_el = self.fetching()
-
+			if round(self.display_time,4) >= VIDEO_LEN:
+				break
 			# Record EL 
 			if not self.download_partial and recording_el:
 				print("need recoding el")
@@ -171,12 +183,12 @@ class Streaming(object):
 			self.buffer_size_bl -= first_sleep
 			self.video_bw_history.append([self.network_trace[self.network_ptr], self.network_time, -1, \
 									self.rate_cut_version, self.network_trace[self.network_ptr]])
-			print("after sleep, Current tiem is %s, and buffer length is %s, %s, is downloading %s" %(self.display_time, self.buffer_size_bl, self.buffer_size_el, self.video_version))
+			# print("after sleep, Current tiem is %s, and buffer length is %s, %s, is downloading %s" %(self.display_time, self.buffer_size_bl, self.buffer_size_el, self.video_version))
 			self.buffer_history.append([round(round(self.buffer_size_bl*100 + 2)/100), round(round(self.buffer_size_el*100 + 2)/100), self.display_time])
 			if self.display_time >= 2.0:
 				self.calculate_alpha()
-				self.alpha_history.append([self.display_time, uti.record_alpha(self.yaw_trace, self.pitch_trace, self.display_time),\
-										 self.rate_cut_version])
+				self.alpha_history.append([self.display_time, uti.record_alpha(self.yaw_trace, self.pitch_trace, self.display_time, VIDEO_LEN),\
+										self.rate_cut_version])
 			temp_video_display_time = self.display_time
 			if sleep_time > 0:
 				print("greater than 1s, sleep left is: %s" % sleep_time)
@@ -204,8 +216,8 @@ class Streaming(object):
 					self.buffer_history.append([round(round(self.buffer_size_bl*100 + 2)/100), round(round(self.buffer_size_el*100 + 2)/100), self.display_time])
 					if self.display_time >= 2.0:
 						self.calculate_alpha()		
-						self.alpha_history.append([self.display_time, uti.record_alpha(self.yaw_trace, self.pitch_trace, self.display_time),\
-												 self.rate_cut_version])
+						self.alpha_history.append([self.display_time, uti.record_alpha(self.yaw_trace, self.pitch_trace, self.display_time, VIDEO_LEN),\
+												self.rate_cut_version])
 					temp_video_display_time = self.display_time
 			return temp_video_display_time, recording_el
 
@@ -238,6 +250,7 @@ class Streaming(object):
 			## Time after request
 			new_temp_video_display_time = self.display_time
 
+		# print("current network ptr is: %s, display_time: %s, index %s, %s" % (self.network_ptr, self.display_time, self.video_seg_index_bl, self.video_seg_index_el))
 		throughput = self.network_trace[self.network_ptr]
 		duration = np.ceil(self.network_time + 10.**-8) - self.network_time
 		if throughput * duration >= self.video_seg_size:
@@ -342,8 +355,8 @@ class Streaming(object):
 			# self.display_time = (round(self.display_time*100000000))/100000000
 			if self.display_time >= 2.0:
 				self.calculate_alpha()
-				self.alpha_history.append([self.display_time, uti.record_alpha(self.yaw_trace, self.pitch_trace, self.display_time),\
-										 self.rate_cut_version])
+				self.alpha_history.append([self.display_time, uti.record_alpha(self.yaw_trace, self.pitch_trace, self.display_time, VIDEO_LEN),\
+										self.rate_cut_version])
 
 			if self.buffer_size_bl == 0:
 				self.bl_freezing_count += 1
@@ -408,8 +421,8 @@ class Streaming(object):
 			else:
 				current_video_version = 1
 			video_seg_index = self.video_seg_index_el
-			# print("el index is %s and version is %s, cause u: %s and delta_time: %s and sniff_bw: %s R_hat; %s" %\
-			# 	(self.video_seg_index_el, current_video_version, u, delta_time, sniff_bw, R_hat))
+			print("el index is %s and version is %s, cause u: %s and delta_time: %s and sniff_bw: %s R_hat; %s" %\
+				(self.video_seg_index_el, current_video_version, u, delta_time, sniff_bw, R_hat))
 		self.video_version = current_video_version
 		self.video_seg_index = video_seg_index
 		# print("going to download: %s at %s" %(self.video_version, self.video_seg_index))
@@ -423,19 +436,19 @@ class Streaming(object):
 
 def main():
 	# network_trace = loadNetworkTrace(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
-	half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
+	half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, VIDEO_LEN, REGULAR_MULTIPLE, REGULAR_ADD)
 	# network_delay = load_5G.load_5G_latency(DELAY_TRACE)
 	average_bw = uti.show_network(network_trace)
-	yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW)
+	yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN)
 
-	init_video_rate, optimal_buffer_length = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)
-	video_trace = uti.generate_video_trace(init_video_rate)
+	init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)
+	video_trace = uti.generate_video_trace(init_video_rate, VIDEO_LEN)
 
-	streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate, optimal_buffer_length)
+	streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx)
 		
 	streaming_sim.run()
 
-	uti.show_result(streaming_sim, CODING_TYPE)
+	uti.show_result(streaming_sim, VIDEO_LEN, CODING_TYPE)
 
 
 if __name__ == '__main__':

@@ -13,10 +13,11 @@ CHUNK_DURATION = 1.0
 # GAMMA_CAL_LEN is the length of calculating gamma, in seconds
 ALPHA_DYNAMIC = 1	# <======================= alpha control
 IS_NON_LAYERED = 1  # <======================= whether it is non-layered coding
+IS_SAVING = 0
 BUFFER_RANGE = 4
 ALPHA_CAL_LEN = 30
 GAMMA_CAL_LEN = 10
-BW_THRESHOLD = 0.2
+BW_THRESHOLD = 0.1
 ALPHA_AHEAD = 0.5
 
 ALPHA_CURVE = [[0.911, 0.870, 0.814, 0.771],\
@@ -26,7 +27,8 @@ GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
 			   [0.883, 0.987, 1.0, 1.0],\
 			   [0.823, 0.942, 0.978, 1.0],\
 			   [0.780, 0.913, 0.970, 1.0],\
-			   [0.669, 0.797, 0.862, 0.893]]
+			   [0.669, 0.797, 0.862, 0.893],\
+			   [0.823, 0.942, 0.978, 1.0]]
 
 BT_RATES = [10,30,50,80,120,160,200]
 ET_RATES = [300, 350, 400, 450, 500, 550, 600, 650, 700]
@@ -136,8 +138,8 @@ def is_bw_change(current_bw, ref_bw):
 	else:
 		return False
 
-def record_alpha(yaw_trace, pitch_trace, display_time, buffer_range = BUFFER_RANGE):
-	temp_alpha_len = np.minimum(buffer_range, VIDEO_LEN - int(round(display_time)))
+def record_alpha(yaw_trace, pitch_trace, display_time, video_length, buffer_range = BUFFER_RANGE):
+	temp_alpha_len = np.minimum(buffer_range, video_length - int(round(display_time)))
 	temp_alpha = [[0] * 5 for i in range(temp_alpha_len)]
 	for i in range(temp_alpha_len):
 		temp_yaw_value, temp_yaw_quan = predict_yaw_trun(yaw_trace, display_time - ALPHA_AHEAD, int(round(display_time)) + i)
@@ -259,18 +261,19 @@ def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate
 			gamma_index = 3
 		elif video_file == './traces/bandwidth/BW_Trace_5G_4.txt':
 			gamma_index = 4
-
+		elif video_file == './traces/bandwidth/BW_Trace_5G_5.txt':
+			gamma_index = 5
 		alpha_curve = ALPHA_CURVE[alpha_index]
 		gamma_curve = GAMMA_CURVE[gamma_index]
 
-		rate_cut = calculate_rate_cute_non_layer(average_bw, alpha_curve, gamma_curve, coding_type)
-	return rate_cut
+		rate_cut, optimal_buffer_len = calculate_rate_cute_non_layer(average_bw, alpha_curve, gamma_curve, coding_type)
+	return rate_cut, optimal_buffer_len, alpha_index, gamma_index
 
-def generate_video_trace(rate_cut):
-	video_trace0 = rate_cut[0] * CHUNK_DURATION * np.ones(VIDEO_LEN)
-	video_trace1 = rate_cut[1] * CHUNK_DURATION * np.ones(VIDEO_LEN)
-	video_trace2 = rate_cut[2] * CHUNK_DURATION * np.ones(VIDEO_LEN)
-	video_trace3 = rate_cut[3] * CHUNK_DURATION * np.ones(VIDEO_LEN)
+def generate_video_trace(rate_cut, video_length):
+	video_trace0 = rate_cut[0] * CHUNK_DURATION * np.ones(video_length)
+	video_trace1 = rate_cut[1] * CHUNK_DURATION * np.ones(video_length)
+	video_trace2 = rate_cut[2] * CHUNK_DURATION * np.ones(video_length)
+	video_trace3 = rate_cut[3] * CHUNK_DURATION * np.ones(video_length)
 	return [video_trace0, video_trace1, video_trace2, video_trace3]
 
 def predict_bw(bw_history):
@@ -282,7 +285,7 @@ def predict_bw(bw_history):
 		else:
 			return sum(row[0] for row in bw_history[-BW_PRED_SAMPLE_SIZE:])/BW_PRED_SAMPLE_SIZE
 
-def load_viewport(vp_trace):
+def load_viewport(vp_trace, video_length):
 	mat_contents = sio.loadmat(vp_trace)
 	trace_data = mat_contents['data_alpha_beta'] # array of structures
 	# pitch_trace_data = mat_contents['view_angle_pitch_combo'] + 90 # array of structures
@@ -308,7 +311,7 @@ def load_viewport(vp_trace):
 	# 		if yaw_trace_data[i] >= 180:
 	# 			yaw_trace_data[i] -= 360
 	# 		assert yaw_trace_data[i] >= -180:
-	return yaw_trace_data[:VIDEO_LEN*VIDEO_FPS], pitch_trace_data[:VIDEO_LEN*VIDEO_FPS]
+	return yaw_trace_data[:video_length*VIDEO_FPS], pitch_trace_data[:video_length*VIDEO_FPS]
 
 def predict_yaw_trun(yaw_trace, display_time, video_seg_index):
 	yaw_predict_value = 0.0
@@ -439,180 +442,6 @@ def generate_fov_rate():
 	return [100, 250, 400, 550, 700, 850]
 
 
-# show results
-def show_rates(streaming, coding_type = 2):
-	# For video rate
-	receive_bitrate = [0.0]*VIDEO_LEN
-	display_bitrate = [0.0]*VIDEO_LEN
-	log_bitrate = [0.0]*VIDEO_LEN
-	total_alpha = 0.0	# fov accuracy ratio
-	total_gamma = 0.0	# chunk pass ratio
-	bl_info = streaming.evr_bl_recordset
-	el_info = streaming.evr_el_recordset
-	# <update> later
-	rate_cut = streaming.rate_cut
-
-	if coding_type == 1:
-		for i in range(BUFFER_BL_INIT):
-			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
-			receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
-
-		for i in range(BUFFER_EL_INIT):
-			display_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
-			receive_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
-
-		for i in range(len(bl_info)):
-			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
-			receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
-
-		for i in range(len(el_info)):
-			time_eff = el_info[i][9]
-			start_frame_index = int((1 - time_eff + el_info[i][0])*VIDEO_FPS)
-			end_frame_index = int((1 + el_info[i][0])*VIDEO_FPS)
-
-			quan_yaw = el_info[i][5]
-			real_yaw = el_info[i][6]
-			real_yaw_trace = streaming.yaw_trace[start_frame_index:end_frame_index]
-			quan_pitch = el_info[i][7]
-			real_pitch = el_info[i][8]
-			real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
-
-			el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
-			if time_eff == 0:
-				assert el_accuracy == 0
-			receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
-			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
-			total_alpha += el_accuracy
-			total_gamma += time_eff
-	elif coding_type == 2:
-		for i in range(BUFFER_BL_INIT):
-			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
-			receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
-
-		for i in range(BUFFER_EL_INIT):
-			display_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
-			receive_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
-
-		for i in range(len(bl_info)):
-			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
-			receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
-
-		for i in range(len(el_info)):
-			time_eff = el_info[i][9]
-			start_frame_index = int((1 - time_eff + el_info[i][0])*VIDEO_FPS)
-			end_frame_index = int((1 + el_info[i][0])*VIDEO_FPS)
-
-			quan_yaw = el_info[i][5]
-			real_yaw = el_info[i][6]
-			real_yaw_trace = streaming.yaw_trace[start_frame_index:end_frame_index]
-			quan_pitch = el_info[i][7]
-			real_pitch = el_info[i][8]
-			real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
-
-			el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
-			if time_eff == 0:
-				assert el_accuracy == 0
-			receive_bitrate[el_info[i][0]] = 0
-			receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
-
-			display_bitrate[el_info[i][0]] -= time_eff * el_accuracy * display_bitrate[el_info[i][0]]
-			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
-			total_alpha += el_accuracy
-			total_gamma += time_eff
-
-	for i in range(len(display_bitrate)):
-		if display_bitrate[i] == 0.0:
-			print("cannot be like this at %s" % i)
-			continue
-		log_bitrate[i] += math.log10(display_bitrate[i]/R_BASE)
-
-	print("Average alpha ratio: ", (total_alpha + 1.0)/VIDEO_LEN)
-	print("Average effective alpha: ", (total_alpha + 1.0)/(len(el_info) + 1))
-	print("EL existing ratio: ", (len(el_info)+1.0)/VIDEO_LEN)
-	print("Average gamma: ", (total_gamma + 1.0)/VIDEO_LEN)
-
-	print("Displayed effective rate sum: ", sum(display_bitrate))
-	print("Received effective rate sum: ", sum(receive_bitrate))
-	print("Log rate sum: ", sum(log_bitrate))
-
-	global FIGURE_NUM
-	g = plt.figure(FIGURE_NUM,figsize=(20,5))
-	FIGURE_NUM += 1
-	plt.plot(range(1,VIDEO_LEN+1), display_bitrate, 'bo-', markersize = 3,\
-	 markeredgewidth = 0.5, markeredgecolor = 'blue', linewidth = 2, label='Displayed Effective Video Bitrate')
-	plt.plot(range(1,VIDEO_LEN+1), receive_bitrate, 'r*-', markersize = 8, \
-	 markeredgewidth = 0.5, markeredgecolor = 'red', linewidth = 2, label='Received Effective Video Bitrate')
-	plt.legend(loc='upper right', fontsize=30)
-	# plt.title('Effective & Received Video Bitrate')
-	plt.xlabel('Second', fontsize =30)
-	plt.ylabel('Mbps',fontsize = 30)
-	plt.tick_params(axis='both', which='major', labelsize=30)
-	plt.tick_params(axis='both', which='minor', labelsize=30)
-	plt.xticks(np.arange(0, VIDEO_LEN+1, 50))
-	plt.yticks(np.arange(0, 1201, 400))
-	plt.gcf().subplots_adjust(bottom=0.20, left=0.085, right=0.97)	
-	plt.axis([0, 300, 0, max(receive_bitrate) + 600])
-
-	return g
-
-def show_buffer(streaming):
-	## Plot buffer length
-	buffer_info = streaming.buffer_history
-	# print(len(buffer_info))
-	# print(buffer_info)
-	if np.ceil(streaming.display_time) < VIDEO_LEN:
-		time_to_end = VIDEO_LEN - int(np.ceil(streaming.display_time))
-		for i in range(time_to_end):
-			buffer_info.append([ np.maximum(buffer_info[-1][0]-1, 0),  np.maximum(buffer_info[-1][1]-1, 0), buffer_info[-1][2]+1])
-	# print(buffer_info)
-	# print(streaming.display_time)
-	# print(len(buffer_info))
-	global FIGURE_NUM
-	a = plt.figure(FIGURE_NUM,figsize=(20,5))
-	FIGURE_NUM +=1
-	plt.plot(range(1, VIDEO_LEN+1), [row[0] for row in buffer_info],'r*-', markersize = 6, markeredgewidth = 0.5, \
-			linewidth = 2, markeredgecolor = 'red',  label='BT Buffer Length')
-	plt.plot(range(1, VIDEO_LEN+1), [row[1] for row in buffer_info],'bo-', markersize = 2, markeredgewidth = 0.5, \
-			linewidth = 2, markeredgecolor = 'blue',  label='ET Buffer Length')
-
-	plt.legend(loc='upper right', fontsize=30)
-	# plt.title('BT/ET Buffer Length', fontsize=30)
-	plt.xlabel('Second', fontsize=30)
-	plt.ylabel('Second', fontsize=30)
-	plt.tick_params(axis='both', which='major', labelsize=30)
-	plt.tick_params(axis='both', which='minor', labelsize=30)
-	plt.xticks(np.arange(0, VIDEO_LEN+1, 50))
-	plt.yticks(np.arange(0, 21, 5))
-	plt.gcf().subplots_adjust(bottom=0.20, left=0.085, right=0.97)	
-	plt.axis([0, 300, 0, 20])
-	return a 
-
-def show_bw(streaming):
-	for i in range(len(streaming.video_bw_history)):
-		print("Bw at %s is %s and real is %s.\n" % (streaming.video_bw_history[i][1], \
-		streaming.video_bw_history[i][0], streaming.video_bw_history[i][4]))
-	
-
-def show_figure(figures):
-	for f in figures:
-		f.show()
-	raw_input()
-
-def show_result(streaming, coding_type):
-	# record figures
-	figures = []
-	figures.append(show_buffer(streaming))
-	#	display and received bitrates
-	figures.append(show_rates(streaming, coding_type))
-
-	# show_bw(streaming)
-
-	# for i in streaming.alpha_history:
-	# 	print(i)
-	
-	if SHOW_FIG:
-		show_figure(figures)
-	return
 
 def quantize_bt_et_rate(ave_bw, bt, et1, et2, et3):
 	if bt < BT_RATES[0] or bt > BT_RATES[-1] or et2 < ET_RATES[0] or et2 > ET_RATES[-1]:
@@ -671,6 +500,291 @@ def calculate_rate_cute_non_layer(average_bw, alpha_curve, gamma_curve, coding_t
 	print("Rate cute is: %s" % rate_cuts)
 	# return [rate_bt_average, rate_et_low, rate_et_average, rate_et_high]
 	return rate_cuts, optimal_buffer_len
+
+
+# show results
+def show_rates(streaming, video_length, coding_type = 2):
+	# For video rate
+	receive_bitrate = [0.0]*video_length
+	display_bitrate = [0.0]*video_length
+	log_bitrate = [0.0]*video_length
+	total_alpha = 0.0	# fov accuracy ratio
+	total_gamma = 0.0	# chunk pass ratio
+	bl_info = streaming.evr_bl_recordset
+	el_info = streaming.evr_el_recordset
+	# <update> later
+	rate_cut = streaming.rate_cut
+
+	if coding_type == 1:
+		for i in range(BUFFER_BL_INIT):
+			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+			receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+
+		for i in range(BUFFER_EL_INIT):
+			display_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
+			receive_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
+
+		for i in range(len(bl_info)):
+			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+			receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+
+		for i in range(len(el_info)):
+			time_eff = el_info[i][9]
+			start_frame_index = int((1 - time_eff + el_info[i][0])*VIDEO_FPS)
+			end_frame_index = int((1 + el_info[i][0])*VIDEO_FPS)
+
+			quan_yaw = el_info[i][5]
+			real_yaw = el_info[i][6]
+			real_yaw_trace = streaming.yaw_trace[start_frame_index:end_frame_index]
+			quan_pitch = el_info[i][7]
+			real_pitch = el_info[i][8]
+			real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
+
+			el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
+			if time_eff == 0:
+				assert el_accuracy == 0
+			receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
+			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
+			total_alpha += el_accuracy
+			total_gamma += time_eff
+	elif coding_type == 2:
+		for i in range(BUFFER_BL_INIT):
+			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+			receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+
+		for i in range(BUFFER_EL_INIT):
+			display_bitrate[i] = VP_ET_RATIO * rate_cut[0][-1]
+			receive_bitrate[i] = VP_ET_RATIO * rate_cut[0][-1]
+
+		for i in range(len(bl_info)):
+			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+			receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+
+		for i in range(len(el_info)):
+			time_eff = el_info[i][9]
+			start_frame_index = int((1 - time_eff + el_info[i][0])*VIDEO_FPS)
+			end_frame_index = int((1 + el_info[i][0])*VIDEO_FPS)
+
+			quan_yaw = el_info[i][5]
+			real_yaw = el_info[i][6]
+			real_yaw_trace = streaming.yaw_trace[start_frame_index:end_frame_index]
+			quan_pitch = el_info[i][7]
+			real_pitch = el_info[i][8]
+			real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
+
+			el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
+			if time_eff == 0:
+				assert el_accuracy == 0
+			receive_bitrate[el_info[i][0]] = 0
+			receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
+
+			display_bitrate[el_info[i][0]] -= time_eff * el_accuracy * display_bitrate[el_info[i][0]]
+			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
+			total_alpha += el_accuracy
+			total_gamma += time_eff
+
+	for i in range(len(display_bitrate)):
+		if display_bitrate[i] == 0.0:
+			print("cannot be like this at %s" % i)
+			continue
+		log_bitrate[i] += math.log10(display_bitrate[i]/R_BASE)
+
+	print("Average alpha ratio: ", (total_alpha + 1.0)/video_length)
+	print("Average effective alpha: ", (total_alpha + 1.0)/(len(el_info) + 1))
+	print("EL existing ratio: ", (len(el_info)+1.0)/video_length)
+	print("Average gamma: ", (total_gamma + 1.0)/video_length)
+
+	print("Displayed effective rate sum: ", sum(display_bitrate))
+	print("Received effective rate sum: ", sum(receive_bitrate))
+	print("Log rate sum: ", sum(log_bitrate))
+
+	global FIGURE_NUM
+	g = plt.figure(FIGURE_NUM,figsize=(20,5))
+	FIGURE_NUM += 1
+	plt.plot(range(1,video_length+1), display_bitrate, 'bo-', markersize = 3,\
+	 markeredgewidth = 0.5, markeredgecolor = 'blue', linewidth = 2, label='Displayed Effective Video Bitrate')
+	plt.plot(range(1,video_length+1), receive_bitrate, 'r*-', markersize = 8, \
+	 markeredgewidth = 0.5, markeredgecolor = 'red', linewidth = 2, label='Received Effective Video Bitrate')
+	plt.legend(loc='upper right', fontsize=30)
+	# plt.title('Effective & Received Video Bitrate')
+	plt.xlabel('Second', fontsize =30)
+	plt.ylabel('Mbps',fontsize = 30)
+	plt.tick_params(axis='both', which='major', labelsize=30)
+	plt.tick_params(axis='both', which='minor', labelsize=30)
+	plt.xticks(np.arange(0, video_length+1, 50))
+	plt.yticks(np.arange(0, 1201, 400))
+	plt.gcf().subplots_adjust(bottom=0.20, left=0.085, right=0.97)	
+	plt.axis([0, video_length, 0, max(receive_bitrate) + 600])
+
+	return g
+
+def show_buffer(streaming, video_length):
+	## Plot buffer length
+	buffer_info = streaming.buffer_history
+	# print(len(buffer_info))
+	# print(buffer_info)
+	if np.ceil(streaming.display_time) < video_length:
+		time_to_end = video_length - int(np.ceil(streaming.display_time))
+		for i in range(time_to_end):
+			buffer_info.append([ np.maximum(buffer_info[-1][0]-1, 0),  np.maximum(buffer_info[-1][1]-1, 0), buffer_info[-1][2]+1])
+	# print(buffer_info)
+	# print(streaming.display_time)
+	# print(len(buffer_info))
+	global FIGURE_NUM
+	a = plt.figure(FIGURE_NUM,figsize=(20,5))
+	FIGURE_NUM +=1
+	plt.plot(range(1, video_length+1), [row[0] for row in buffer_info],'r*-', markersize = 6, markeredgewidth = 0.5, \
+			linewidth = 2, markeredgecolor = 'red',  label='BT Buffer Length')
+	plt.plot(range(1, video_length+1), [row[1] for row in buffer_info],'bo-', markersize = 2, markeredgewidth = 0.5, \
+			linewidth = 2, markeredgecolor = 'blue',  label='ET Buffer Length')
+
+	plt.legend(loc='upper right', fontsize=30)
+	# plt.title('BT/ET Buffer Length', fontsize=30)
+	plt.xlabel('Second', fontsize=30)
+	plt.ylabel('Second', fontsize=30)
+	plt.tick_params(axis='both', which='major', labelsize=30)
+	plt.tick_params(axis='both', which='minor', labelsize=30)
+	plt.xticks(np.arange(0, video_length+1, 50))
+	plt.yticks(np.arange(0, 21, 5))
+	plt.gcf().subplots_adjust(bottom=0.20, left=0.085, right=0.97)	
+	plt.axis([0, video_length, 0, 20])
+	return a 
+
+def show_received_rates(streaming, video_length, coding_type = 2):
+	# For video rate
+	receive_bitrate = [0.0]*video_length
+	display_bitrate = [0.0]*video_length
+	log_bitrate = [0.0]*video_length
+	total_alpha = 0.0	# fov accuracy ratio
+	total_gamma = 0.0	# chunk pass ratio
+	bl_info = streaming.evr_bl_recordset
+	el_info = streaming.evr_el_recordset
+	# <update> later
+	rate_cut = streaming.rate_cut
+
+	frame_received = [0.0]*video_length*30
+	if coding_type == 1:
+		for i in range(BUFFER_BL_INIT):
+			for j in range(VIDEO_FPS):
+			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+
+			receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+
+		for i in range(BUFFER_EL_INIT):
+			display_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
+			receive_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
+
+		for i in range(len(bl_info)):
+			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+			receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+
+		for i in range(len(el_info)):
+			time_eff = el_info[i][9]
+			start_frame_index = int((1 - time_eff + el_info[i][0])*VIDEO_FPS)
+			end_frame_index = int((1 + el_info[i][0])*VIDEO_FPS)
+
+			quan_yaw = el_info[i][5]
+			real_yaw = el_info[i][6]
+			real_yaw_trace = streaming.yaw_trace[start_frame_index:end_frame_index]
+			quan_pitch = el_info[i][7]
+			real_pitch = el_info[i][8]
+			real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
+
+			el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
+			if time_eff == 0:
+				assert el_accuracy == 0
+			receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
+			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
+			total_alpha += el_accuracy
+			total_gamma += time_eff
+	elif coding_type == 2:
+		
+		for i in range(BUFFER_BL_INIT):
+			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+			receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+
+		for i in range(BUFFER_EL_INIT):
+			display_bitrate[i] = VP_ET_RATIO * rate_cut[0][-1]
+			receive_bitrate[i] = VP_ET_RATIO * rate_cut[0][-1]
+
+		for i in range(len(bl_info)):
+			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+			receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+
+		for i in range(len(el_info)):
+			time_eff = el_info[i][9]
+			start_frame_index = int((1 - time_eff + el_info[i][0])*VIDEO_FPS)
+			end_frame_index = int((1 + el_info[i][0])*VIDEO_FPS)
+
+			quan_yaw = el_info[i][5]
+			real_yaw = el_info[i][6]
+			real_yaw_trace = streaming.yaw_trace[start_frame_index:end_frame_index]
+			quan_pitch = el_info[i][7]
+			real_pitch = el_info[i][8]
+			real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
+
+			el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
+			if time_eff == 0:
+				assert el_accuracy == 0
+			receive_bitrate[el_info[i][0]] = 0
+			receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
+
+			display_bitrate[el_info[i][0]] -= time_eff * el_accuracy * display_bitrate[el_info[i][0]]
+			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
+			total_alpha += el_accuracy
+			total_gamma += time_eff
+
+	for i in range(len(display_bitrate)):
+		if display_bitrate[i] == 0.0:
+			print("cannot be like this at %s" % i)
+			continue
+		log_bitrate[i] += math.log10(display_bitrate[i]/R_BASE)
+
+def show_bw(streaming):
+	for i in range(len(streaming.video_bw_history)):
+		print("Bw at %s is %s and real is %s.\n" % (streaming.video_bw_history[i][1], \
+		streaming.video_bw_history[i][0], streaming.video_bw_history[i][4]))
+	
+
+def show_figure(figures):
+	for f in figures:
+		f[0].show()
+	raw_input()
+
+def show_result(streaming, video_length, coding_type):
+	# record figures
+	figures = []
+	figures.append([show_buffer(streaming, video_length), 'buffer'])
+	#	display and received bitrates
+	figures.append([show_rates(streaming, video_length, coding_type),'rate'])
+
+	figures.append([show_received_rates(streaming, video_length, coding_type),'received_rate'])
+
+	# show_bw(streaming)
+
+	# for i in streaming.alpha_history:
+	# 	print(i)
+	
+	if SHOW_FIG:
+		show_figure(figures)
+
+	if IS_SAVING:
+		if streaming.dynamic == 1:
+			if streaming.dy_type == 'fix':
+				for fig in figures:
+					fig[0].savefig('./figures/fix/fix'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
+			elif streaming.dy_type == 'adaptive':
+				for fig in figures:
+					fig[0].savefig('./figures/adaptive/adaptive'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
+		else:
+			if streaming.dy_type == 'fix':
+				for fig in figures:
+					fig[0].savefig('./figures/static/static'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
+			elif streaming.dy_type == 'adaptive':
+				print("adaptive is not for static")
+
+	return
+
 
 
 
