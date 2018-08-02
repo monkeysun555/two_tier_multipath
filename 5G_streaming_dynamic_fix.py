@@ -37,7 +37,7 @@ ET_MAX_PRED = Q_REF_EL + 2
 CHUNK_DURATION = 1.0
 #Others
 KP = 0.6		# P controller
-KI = 0.05		# I controller
+KI = 0.01		# I controller
 PI_RANGE = 30
 DELAY = 0.01		# second
 PI_SMOOTH = 1
@@ -360,7 +360,7 @@ class Streaming(object):
 
 			if self.buffer_size_bl == 0:
 				self.bl_freezing_count += 1
-				self.freezing_time += rebuf
+				self.freezing_time += np.round(rebuf, 4)
 			if self.buffer_size_el == 0:
 				self.el_freezing_count += 1
 
@@ -421,8 +421,8 @@ class Streaming(object):
 			else:
 				current_video_version = 1
 			video_seg_index = self.video_seg_index_el
-			print("el index is %s and version is %s, cause u: %s and delta_time: %s and sniff_bw: %s R_hat; %s" %\
-				(self.video_seg_index_el, current_video_version, u, delta_time, sniff_bw, R_hat))
+			# print("el index is %s and version is %s, cause u: %s and delta_time: %s and sniff_bw: %s R_hat; %s" %\
+				# (self.video_seg_index_el, current_video_version, u, delta_time, sniff_bw, R_hat))
 		self.video_version = current_video_version
 		self.video_seg_index = video_seg_index
 		# print("going to download: %s at %s" %(self.video_version, self.video_seg_index))

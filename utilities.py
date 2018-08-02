@@ -60,11 +60,14 @@ VP_VER_SPAN = 120.0
 VP_BT_RATIO = (VP_HOR_SPAN*VP_VER_SPAN)/(BT_HOR_SPAN*BT_VER_SPAN)
 VP_ET_RATIO = (VP_HOR_SPAN*VP_VER_SPAN)/(ET_HOR_SPAN*ET_VER_SPAN)
 
-# Streaming 
+# Streaming Quality
 BUFFER_BL_INIT = 10
 BUFFER_EL_INIT = 1
 R_BASE = 100.0
-
+Q_a = 31.74
+Q_b = 3.3
+Q_c = -10
+Q_d = -10
 # Plot info
 FIGURE_NUM = 1
 SHOW_FIG = 1
@@ -507,26 +510,33 @@ def show_rates(streaming, video_length, coding_type = 2):
 	# For video rate
 	receive_bitrate = [0.0]*video_length
 	display_bitrate = [0.0]*video_length
+	deliver_bitrate = [0.0]*video_length
 	log_bitrate = [0.0]*video_length
+	average_frame_quality = [0.0]*video_length
+	frame_quality_record = [0]*video_length
 	total_alpha = 0.0	# fov accuracy ratio
 	total_gamma = 0.0	# chunk pass ratio
 	bl_info = streaming.evr_bl_recordset
 	el_info = streaming.evr_el_recordset
 	# <update> later
 	rate_cut = streaming.rate_cut
-
+	rebuf = streaming.freezing_time
 	if coding_type == 1:
 		for i in range(BUFFER_BL_INIT):
 			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
 			receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+			deliver_bitrate[i] += rate_cut[0][0]
 
 		for i in range(BUFFER_EL_INIT):
 			display_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
 			receive_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
+			deliver_bitrate[i] += rate_cut[0][-1]
+
 
 		for i in range(len(bl_info)):
 			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
 			receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+			deliver_bitrate[bl_info[i][0]] += rate_cut[bl_info[i][5]][bl_info[i][1]]
 
 		for i in range(len(el_info)):
 			time_eff = el_info[i][9]
@@ -545,20 +555,29 @@ def show_rates(streaming, video_length, coding_type = 2):
 				assert el_accuracy == 0
 			receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
 			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
+			deliver_bitrate[el_info[i][0]] += rate_cut[el_info[i][10]][el_info[i][1]]
+
 			total_alpha += el_accuracy
 			total_gamma += time_eff
+
 	elif coding_type == 2:
 		for i in range(BUFFER_BL_INIT):
 			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
 			receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
+			deliver_bitrate[i] += rate_cut[0][0]
 
 		for i in range(BUFFER_EL_INIT):
 			display_bitrate[i] = VP_ET_RATIO * rate_cut[0][-1]
 			receive_bitrate[i] = VP_ET_RATIO * rate_cut[0][-1]
+			deliver_bitrate[i] += rate_cut[0][-1]
+			average_frame_quality[i] += get_quality((VP_ET_RATIO * rate_cut[0][-1])/VIDEO_FPS, 0.0, 0.0)
+			# print(average_frame_quality)
+			frame_quality_record[i] = 1
 
 		for i in range(len(bl_info)):
 			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
 			receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
+			deliver_bitrate[bl_info[i][0]] += rate_cut[bl_info[i][5]][bl_info[i][1]]
 
 		for i in range(len(el_info)):
 			time_eff = el_info[i][9]
@@ -573,6 +592,11 @@ def show_rates(streaming, video_length, coding_type = 2):
 			real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
 
 			el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
+
+			average_frame_quality[el_info[i][0]] = frame_nlc_quality(quan_yaw, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff, \
+									display_bitrate[el_info[i][0]], VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]])
+			frame_quality_record[el_info[i][0]] = 1
+
 			if time_eff == 0:
 				assert el_accuracy == 0
 			receive_bitrate[el_info[i][0]] = 0
@@ -580,32 +604,49 @@ def show_rates(streaming, video_length, coding_type = 2):
 
 			display_bitrate[el_info[i][0]] -= time_eff * el_accuracy * display_bitrate[el_info[i][0]]
 			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
+
+			deliver_bitrate[el_info[i][0]] += rate_cut[el_info[i][10]][el_info[i][1]]
 			total_alpha += el_accuracy
 			total_gamma += time_eff
 
-	for i in range(len(display_bitrate)):
+	for i in range(len(average_frame_quality)):
+		if frame_quality_record[i] == 0:
+			average_frame_quality[i] += get_quality(display_bitrate[i]/VIDEO_FPS, 0.0, 0.0)
+
+	for i in range(len(display_bitrate)):	# to QoE
 		if display_bitrate[i] == 0.0:
 			print("cannot be like this at %s" % i)
 			continue
-		log_bitrate[i] += math.log10(display_bitrate[i]/R_BASE)
+		log_bitrate[i] += get_quality(display_bitrate[i], 0.0, 0.0)
 
 	print("Average alpha ratio: ", (total_alpha + 1.0)/video_length)
 	print("Average effective alpha: ", (total_alpha + 1.0)/(len(el_info) + 1))
 	print("EL existing ratio: ", (len(el_info)+1.0)/video_length)
 	print("Average gamma: ", (total_gamma + 1.0)/video_length)
 
-	print("Displayed effective rate sum: ", sum(display_bitrate))
-	print("Received effective rate sum: ", sum(receive_bitrate))
-	print("Log rate sum: ", sum(log_bitrate))
+	# print("Displayed effective rate sum: ", sum(display_bitrate))
+	# print("Received effective rate sum: ", sum(receive_bitrate))
+	# print("Log rate sum: ", sum(log_bitrate))
+	print("<===========================================>")
+	# print(video_length)
+	print("Average Quality (wrong): ", sum(log_bitrate)/video_length)	 ##
+	print("Averate Per Frame Quality (right): ", sum(average_frame_quality)/video_length)
+	print("Displayed rate sum: ", sum(display_bitrate))
+	print("Average Displayed rate: ", sum(display_bitrate)/video_length)	
+	print("Received rate sum: ", sum(deliver_bitrate))
+	print("Average received rate: ", sum(deliver_bitrate)/video_length)	
+	print("Total rebuffering is: %s" % rebuf)
 
 	global FIGURE_NUM
 	g = plt.figure(FIGURE_NUM,figsize=(20,5))
 	FIGURE_NUM += 1
-	plt.plot(range(1,video_length+1), display_bitrate, 'bo-', markersize = 3,\
-	 markeredgewidth = 0.5, markeredgecolor = 'blue', linewidth = 2, label='Displayed Effective Video Bitrate')
-	plt.plot(range(1,video_length+1), receive_bitrate, 'r*-', markersize = 8, \
-	 markeredgewidth = 0.5, markeredgecolor = 'red', linewidth = 2, label='Received Effective Video Bitrate')
-	plt.legend(loc='upper right', fontsize=30)
+	plt.plot(range(1,video_length+1), display_bitrate, 'gv-', markersize = 3,\
+	 markeredgewidth = 0.1, markeredgecolor = 'green', linewidth = 2, label='Displayed Effective Video Bitrate')
+	plt.plot(range(1,video_length+1), receive_bitrate, 'ro-', markersize = 4, \
+	 markeredgewidth = 0.05, markeredgecolor = 'red', linewidth = 1, label='Received Effective Video Bitrate')
+	plt.plot(range(1,video_length+1), deliver_bitrate, 'b*-', markersize = 5, \
+	 markeredgewidth = 0.2, markeredgecolor = 'blue', linewidth = 2, label='Received Video Bitrate')
+	plt.legend(loc='upper right', fontsize=22)
 	# plt.title('Effective & Received Video Bitrate')
 	plt.xlabel('Second', fontsize =30)
 	plt.ylabel('Mbps',fontsize = 30)
@@ -614,7 +655,7 @@ def show_rates(streaming, video_length, coding_type = 2):
 	plt.xticks(np.arange(0, video_length+1, 50))
 	plt.yticks(np.arange(0, 1201, 400))
 	plt.gcf().subplots_adjust(bottom=0.20, left=0.085, right=0.97)	
-	plt.axis([0, video_length, 0, max(receive_bitrate) + 600])
+	plt.axis([0, video_length, 0, max(receive_bitrate) + 1200])
 
 	return g
 
@@ -633,10 +674,10 @@ def show_buffer(streaming, video_length):
 	global FIGURE_NUM
 	a = plt.figure(FIGURE_NUM,figsize=(20,5))
 	FIGURE_NUM +=1
-	plt.plot(range(1, video_length+1), [row[0] for row in buffer_info],'r*-', markersize = 6, markeredgewidth = 0.5, \
-			linewidth = 2, markeredgecolor = 'red',  label='BT Buffer Length')
-	plt.plot(range(1, video_length+1), [row[1] for row in buffer_info],'bo-', markersize = 2, markeredgewidth = 0.5, \
-			linewidth = 2, markeredgecolor = 'blue',  label='ET Buffer Length')
+	plt.plot(range(1, video_length+1), [row[0] for row in buffer_info],'k*-', markersize = 6, markeredgewidth = 0.5, \
+			linewidth = 2, markeredgecolor = 'black',  label='BT Buffer Length')
+	plt.plot(range(1, video_length+1), [row[1] for row in buffer_info],'ro-', markersize = 2, markeredgewidth = 0.5, \
+			linewidth = 2, markeredgecolor = 'red',  label='ET Buffer Length')
 
 	plt.legend(loc='upper right', fontsize=30)
 	# plt.title('BT/ET Buffer Length', fontsize=30)
@@ -649,96 +690,6 @@ def show_buffer(streaming, video_length):
 	plt.gcf().subplots_adjust(bottom=0.20, left=0.085, right=0.97)	
 	plt.axis([0, video_length, 0, 20])
 	return a 
-
-def show_received_rates(streaming, video_length, coding_type = 2):
-	# For video rate
-	receive_bitrate = [0.0]*video_length
-	display_bitrate = [0.0]*video_length
-	log_bitrate = [0.0]*video_length
-	total_alpha = 0.0	# fov accuracy ratio
-	total_gamma = 0.0	# chunk pass ratio
-	bl_info = streaming.evr_bl_recordset
-	el_info = streaming.evr_el_recordset
-	# <update> later
-	rate_cut = streaming.rate_cut
-
-	frame_received = [0.0]*video_length*30
-	if coding_type == 1:
-		for i in range(BUFFER_BL_INIT):
-			for j in range(VIDEO_FPS):
-			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
-
-			receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
-
-		for i in range(BUFFER_EL_INIT):
-			display_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
-			receive_bitrate[i] += VP_ET_RATIO * rate_cut[0][-1]
-
-		for i in range(len(bl_info)):
-			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
-			receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
-
-		for i in range(len(el_info)):
-			time_eff = el_info[i][9]
-			start_frame_index = int((1 - time_eff + el_info[i][0])*VIDEO_FPS)
-			end_frame_index = int((1 + el_info[i][0])*VIDEO_FPS)
-
-			quan_yaw = el_info[i][5]
-			real_yaw = el_info[i][6]
-			real_yaw_trace = streaming.yaw_trace[start_frame_index:end_frame_index]
-			quan_pitch = el_info[i][7]
-			real_pitch = el_info[i][8]
-			real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
-
-			el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
-			if time_eff == 0:
-				assert el_accuracy == 0
-			receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
-			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
-			total_alpha += el_accuracy
-			total_gamma += time_eff
-	elif coding_type == 2:
-		
-		for i in range(BUFFER_BL_INIT):
-			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
-			receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
-
-		for i in range(BUFFER_EL_INIT):
-			display_bitrate[i] = VP_ET_RATIO * rate_cut[0][-1]
-			receive_bitrate[i] = VP_ET_RATIO * rate_cut[0][-1]
-
-		for i in range(len(bl_info)):
-			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
-			receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
-
-		for i in range(len(el_info)):
-			time_eff = el_info[i][9]
-			start_frame_index = int((1 - time_eff + el_info[i][0])*VIDEO_FPS)
-			end_frame_index = int((1 + el_info[i][0])*VIDEO_FPS)
-
-			quan_yaw = el_info[i][5]
-			real_yaw = el_info[i][6]
-			real_yaw_trace = streaming.yaw_trace[start_frame_index:end_frame_index]
-			quan_pitch = el_info[i][7]
-			real_pitch = el_info[i][8]
-			real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
-
-			el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
-			if time_eff == 0:
-				assert el_accuracy == 0
-			receive_bitrate[el_info[i][0]] = 0
-			receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
-
-			display_bitrate[el_info[i][0]] -= time_eff * el_accuracy * display_bitrate[el_info[i][0]]
-			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
-			total_alpha += el_accuracy
-			total_gamma += time_eff
-
-	for i in range(len(display_bitrate)):
-		if display_bitrate[i] == 0.0:
-			print("cannot be like this at %s" % i)
-			continue
-		log_bitrate[i] += math.log10(display_bitrate[i]/R_BASE)
 
 def show_bw(streaming):
 	for i in range(len(streaming.video_bw_history)):
@@ -758,7 +709,7 @@ def show_result(streaming, video_length, coding_type):
 	#	display and received bitrates
 	figures.append([show_rates(streaming, video_length, coding_type),'rate'])
 
-	figures.append([show_received_rates(streaming, video_length, coding_type),'received_rate'])
+	# figures.append([show_received_rates(streaming, video_length, coding_type),'received_rate'])
 
 	# show_bw(streaming)
 
@@ -785,6 +736,160 @@ def show_result(streaming, video_length, coding_type):
 
 	return
 
+
+def get_quality(eff_rate, rebuff, black, zero_rate = False):
+	if not zero_rate:
+		quality = Q_a + Q_b*np.log(eff_rate) - Q_c*rebuff - Q_d*black
+	else:
+		quality = - Q_c*rebuff - Q_d*black
+		# quality = 0.0
+	return quality
+
+def frame_nlc_quality(quan_yaw, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff, base_rate, et_rate):
+	if len(real_yaw_trace) == 0:
+		assert time_eff == 0
+		return get_quality(base_rate/VIDEO_FPS, 0.0, 0.0)
+	# For yaw
+	pred_yaw_value = quan_yaw * 30.0 + 15.0
+	pred_pitch_value = quan_pitch * 30.0
+
+	yaw_eff = 0.0
+	pitch_eff = 0.0
+
+	base_frame_length = VIDEO_FPS - len(real_yaw_trace)
+	quality_without_et = base_frame_length * get_quality(base_rate/VIDEO_FPS, 0.0, 0.0)
+
+
+	quality_with_et = 0.0
+	for i in range(len(real_yaw_trace)):
+		yaw_distance = np.minimum(np.abs(real_yaw_trace[i] - pred_yaw_value), 360.0 - np.abs(real_yaw_trace[i] - pred_yaw_value)) 
+		yaw_accuracy = np.minimum(1.0, np.maximum(0.0, ((VP_HOR_SPAN + ET_HOR_SPAN)/2.0 - yaw_distance)/VP_HOR_SPAN))	
+		pitch_distance = np.abs(pred_pitch_value - real_pitch_trace[i])
+		pitch_accuracy = np.minimum(1.0, np.maximum(0.0, (VP_VER_SPAN + ET_VER_SPAN)/2.0 - pitch_distance)/VP_VER_SPAN)
+		area_accuracy = yaw_accuracy * pitch_accuracy
+		eff_frame_rate = (base_rate/VIDEO_FPS) * (1.0 - area_accuracy) + (et_rate/VIDEO_FPS)*area_accuracy
+		# print(area_accuracy, base_rate/VIDEO_FPS, et_rate/VIDEO_FPS)
+		quality_with_et += get_quality(eff_frame_rate, 0.0, 0.0)
+
+	per_frame_quality = ((quality_with_et + quality_without_et)/VIDEO_FPS)
+	# print(per_frame_quality)
+	return per_frame_quality
+
+def frame_nlc_fov_quality(quan_yaw, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff, rate):
+	assert len(real_yaw_trace) == VIDEO_FPS
+	# For yaw
+	pred_yaw_value = quan_yaw * 30.0 + 15.0
+	pred_pitch_value = quan_pitch * 30.0
+
+	yaw_eff = 0.0
+	pitch_eff = 0.0
+
+	quality_sum = 0.0
+	for i in range(len(real_yaw_trace)):
+		yaw_distance = np.minimum(np.abs(real_yaw_trace[i] - pred_yaw_value), 360.0 - np.abs(real_yaw_trace[i] - pred_yaw_value)) 
+		yaw_accuracy = np.minimum(1.0, np.maximum(0.0, ((VP_HOR_SPAN + ET_HOR_SPAN)/2.0 - yaw_distance)/VP_HOR_SPAN))	
+		pitch_distance = np.abs(pred_pitch_value - real_pitch_trace[i])
+		pitch_accuracy = np.minimum(1.0, np.maximum(0.0, (VP_VER_SPAN + ET_VER_SPAN)/2.0 - pitch_distance)/VP_VER_SPAN)
+		area_accuracy = yaw_accuracy * pitch_accuracy
+		eff_frame_rate = (rate/VIDEO_FPS)*area_accuracy
+		black = 1 - area_accuracy
+		# assert eff_frame_rate > 0
+		if area_accuracy == 0:
+			quality_sum += get_quality(0.0, 0.0, black, True)
+		else:
+			quality_sum += get_quality(eff_frame_rate, 0.0, black)
+
+	per_frame_quality = quality_sum/VIDEO_FPS
+	# print(per_frame_quality)
+	return per_frame_quality
+
+##############
+
+def show_360_result(streaming, video_length, inti_buffer_length):
+	print("length of record is: %s" % len(streaming.evr_recordset))
+	deliver_bitrate = [0.0]*video_length
+	display_bitrate = [0.0]*video_length
+	quality = [0.0]*video_length
+	info = streaming.evr_recordset
+	rate = streaming.rates
+	rebuff = 0.0
+	for i in range(inti_buffer_length):
+		deliver_bitrate[i] += rate[-1]
+		display_bitrate[i] += VP_BT_RATIO * rate[-1]
+		quality[i] += get_quality(VP_BT_RATIO*rate[-1]/VIDEO_FPS, 0.0, 0.0) 
+
+
+	for i in range(len(info)):
+		deliver_bitrate[info[i][0]] += rate[info[i][1]]
+		display_bitrate[info[i][0]] += VP_BT_RATIO * rate[info[i][1]]
+		quality[info[i][0]] += get_quality((VP_BT_RATIO * rate[info[i][1]])/VIDEO_FPS, info[i][2], 0.0) 
+		rebuff += info[i][2]
+		if info[i][2] != 0:
+			print(info[i][0])
+			print(info[i][2])
+			print(len(streaming.buffer_history))
+
+	print("Average Quality (per frame, right): ", sum(quality)/video_length)	
+	print("Displayed rate sum: ", sum(display_bitrate))
+	print("Average Displayed rate: ", sum(display_bitrate)/video_length)	
+	print("Received rate sum: ", sum(deliver_bitrate))
+	print("Average received rate: ", sum(deliver_bitrate)/video_length)	
+	print("Total rebuffering is: %s" % rebuff)
+
+def show_fov_result(streaming, video_length, inti_buffer_length):
+	print("length of record is: %s" % len(streaming.evr_recordset))
+	deliver_bitrate = [0.0]*video_length
+	display_bitrate = [0.0]*video_length
+	quality = [0.0]*video_length
+	per_frame_quality = [0.0]*video_length
+	black_record = [0.0]*video_length
+	info = streaming.evr_recordset
+	rate = streaming.rates
+	# rebuff = 0.0
+	for i in range(inti_buffer_length):
+		deliver_bitrate[i] += rate[-1]
+		display_bitrate[i] += VP_ET_RATIO * rate[-1]
+		quality[i] += get_quality(VP_BT_RATIO*rate[-1], 0.0, 0.0) 
+
+	for i in range(len(info)):
+		black = 0.0
+		index = info[i][0]
+		version = info[i][1]
+		if version >= 0:
+			start_frame_index = int(info[i][0]*VIDEO_FPS)
+			end_frame_index = int((1 + info[i][0])*VIDEO_FPS)
+			quan_yaw = info[i][3]
+			real_yaw = info[i][4]
+			real_yaw_trace = streaming.yaw_trace[start_frame_index:end_frame_index]
+			quan_pitch = info[i][5]
+			real_pitch = info[i][6]
+			real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
+			accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, 1.0)
+			assert accuracy <= 1 and accuracy >= 0
+			black = 1.0 - accuracy
+
+			deliver_bitrate[index] += rate[version]
+			display_bitrate[index] += VP_ET_RATIO * rate[version]
+			if accuracy == 0:
+				quality[index] += get_quality(VP_BT_RATIO * accuracy * rate[version], 0.0, black, True) 
+			else:
+				quality[index] += get_quality(VP_BT_RATIO * accuracy * rate[version], 0.0, black) 
+				per_frame_quality[index] += frame_nlc_fov_quality(quan_yaw, quan_pitch, real_yaw_trace, real_pitch_trace, 1.0, rate[version])
+		else:
+			deliver_bitrate[index] += 0.0
+			display_bitrate[index] += 0.0
+			quality[index] += get_quality(0.0, 0.0, black, True)
+			per_frame_quality[index] += get_quality(0.0, 0.0, black, True)
+		black_record[index] += black
+
+	print("Average Quality on chunk (wrong): ", sum(quality)/video_length)	
+	print("Average Quality (per frame, right): ", sum(per_frame_quality)/video_length)	
+	print("Displayed rate sum: ", sum(display_bitrate))
+	print("Average Displayed rate: ", sum(display_bitrate)/video_length)	
+	print("Received rate sum: ", sum(deliver_bitrate))
+	print("Average received rate: ", sum(deliver_bitrate)/video_length)	
+	# print(black_record)
+	print("Average black ratio is: %s" % (np.sum(black_record)/video_length))
 
 
 
