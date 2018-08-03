@@ -25,7 +25,7 @@ if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':		#
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
 # VP trace
-VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_9_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
+VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_13_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
 
 # System parameters
 BUFFER_BL_INIT = 10
@@ -436,12 +436,14 @@ class Streaming(object):
 
 def main():
 	# network_trace = loadNetworkTrace(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
-	half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, VIDEO_LEN, REGULAR_MULTIPLE, REGULAR_ADD)
+	half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, VIDEO_LEN)
 	# network_delay = load_5G.load_5G_latency(DELAY_TRACE)
 	average_bw = uti.show_network(network_trace)
 	yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN)
 
 	init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)
+	# init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE, False, Q_REF_EL)	# For test alpha curve
+	
 	video_trace = uti.generate_video_trace(init_video_rate, VIDEO_LEN)
 
 	streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx)

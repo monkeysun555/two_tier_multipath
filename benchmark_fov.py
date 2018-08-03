@@ -9,12 +9,13 @@ import utilities as uti
 VIDEO_LEN = 300
 VIDEO_FPS = 30
 REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_5.txt'  # 1: partially disturbed  2: unstable  3: stable   4: medium_liyang 5:medium_fanyi
+
 if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':
 	VIDEO_LEN = 450
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
 
-VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_9_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
+VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_13_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
 
 BUFFER_INIT = 1
 Q_REF = 1
@@ -65,7 +66,7 @@ class Streaming(object):
 
 				self.yaw_predict_value, self.yaw_predict_quan = uti.predict_yaw_trun(self.yaw_trace, self.network_time, self.video_seg_index)
 				self.pitch_predict_value, self.pitch_predict_quan = uti.predict_pitch_trun(self.pitch_trace, self.network_time, self.video_seg_index)
-
+				# print(self.yaw_predict_value, self.yaw_trace[self.video_seg_index*VIDEO_FPS + 15])
 			self.fetching()
 
 
@@ -92,6 +93,7 @@ class Streaming(object):
 					if self.video_seg_index < VIDEO_LEN:
 						self.yaw_predict_value, self.yaw_predict_quan = uti.predict_yaw_trun(self.yaw_trace, self.network_time, self.video_seg_index)
 						self.pitch_predict_value, self.pitch_predict_quan = uti.predict_pitch_trun(self.pitch_trace, self.network_time, self.video_seg_index)
+						# print(self.yaw_predict_value, self.yaw_trace[self.video_seg_index*VIDEO_FPS + 15])
 						sniff_bw = uti.predict_bw(self.video_bw_history)
 						self.PI_control(sniff_bw)
 					else:
@@ -127,6 +129,7 @@ class Streaming(object):
 		temp_time = self.network_time
 		payload = throughput * duration
 		if payload > self.video_chunk_size:
+			self.download_partial = 0
 			assert self.video_seg_index > self.network_ptr
 			fraction_time = self.video_chunk_size/throughput
 			self.network_time += fraction_time
@@ -151,8 +154,8 @@ class Streaming(object):
 			self.video_seg_index += 1
 
 			if round(self.buffer_size, 3) > BUFFER_THRESH:
-				print("enter sleep, time is %s, ptr is %s, and buffer is %s, seg is %s" %(\
-									self.network_time, self.network_ptr, self.buffer_size, self.video_seg_index))
+				# print("enter sleep, time is %s, ptr is %s, and buffer is %s, seg is %s" %(\
+				# 					self.network_time, self.network_ptr, self.buffer_size, self.video_seg_index))
 				index_gap = self.video_seg_index - self.network_time
 				assert index_gap >= self.buffer_size - BUFFER_THRESH
 				sleep_time = np.maximum(index_gap - BUFFER_THRESH, self.buffer_size - BUFFER_THRESH)
@@ -173,8 +176,8 @@ class Streaming(object):
 				if not round(self.buffer_size, 3).is_integer():
 					print("special case, buffer size is not integer after sleep: %s" % round(self.buffer_size, 3))
 				self.buffer_history.append([self.buffer_size, self.network_time])
-			print("after downloading, time is %s, ptr is %s, and buffer is %s, seg is %s" %(\
-									self.network_time, self.network_ptr, self.buffer_size, self.video_seg_index))
+			# print("after downloading, time is %s, ptr is %s, and buffer is %s, seg is %s" %(\
+			# 						self.network_time, self.network_ptr, self.buffer_size, self.video_seg_index))
 		else:
 			self.download_partial = 1
 			self.network_time += duration
@@ -192,8 +195,8 @@ class Streaming(object):
 				self.evr_recordset.append([self.video_seg_index, -1, self.network_time, -1, -1, -1, -1])				
 				self.video_seg_index = self.network_ptr + 1
 				self.download_partial = 0
-			print("not finish, time is %s, ptr is %s, and buffer is %s, seg is %s" %(self.network_time, \
-										self.network_ptr, self.buffer_size, self.video_seg_index))
+			# print("not finish, time is %s, ptr is %s, and buffer is %s, seg is %s" %(self.network_time, \
+			# 							self.network_ptr, self.buffer_size, self.video_seg_index))
 
 
 

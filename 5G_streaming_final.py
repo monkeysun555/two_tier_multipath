@@ -1047,7 +1047,7 @@ class streaming(object):
 
 def main():
 	# network_trace = loadNetworkTrace(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
-	half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, VIDEO_LEN, REGULAR_MULTIPLE, REGULAR_ADD)
+	half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, VIDEO_LEN, 0, REGULAR_MULTIPLE, REGULAR_ADD)
 	#### For 5G delay
 	# network_delay = load_5G.load_5G_latency(DELAY_TRACE)
 	print("5G trace mean:", np.mean(network_trace))

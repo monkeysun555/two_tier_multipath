@@ -20,8 +20,8 @@ GAMMA_CAL_LEN = 10
 BW_THRESHOLD = 0.1
 ALPHA_AHEAD = 0.5
 
-ALPHA_CURVE = [[0.911, 0.870, 0.814, 0.771],\
-				[0.876, 0.728, 0.594, 0.534]]
+ALPHA_CURVE = [[0.860, 0.806, 0.763, 0.698],\
+				[0.763, 0.690, 0.634, 0.585]]
 
 GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
 			   [0.883, 0.987, 1.0, 1.0],\
@@ -141,6 +141,12 @@ def is_bw_change(current_bw, ref_bw):
 	else:
 		return False
 
+def is_bw_std_change(current_bw, ref_bw):
+	if current_bw >= (1+BW_THRESHOLD)*ref_bw or current_bw <= (1-BW_THRESHOLD)*ref_bw:
+		return True
+	else:
+		return False
+
 def record_alpha(yaw_trace, pitch_trace, display_time, video_length, buffer_range = BUFFER_RANGE):
 	temp_alpha_len = np.minimum(buffer_range, video_length - int(round(display_time)))
 	temp_alpha = [[0] * 5 for i in range(temp_alpha_len)]
@@ -238,7 +244,7 @@ def show_network(network_trace):
 	# print("5G delay median:", np.median(network_delay))
 	return np.mean(network_trace)
 
-def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate_gamma = True):
+def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate_gamma = True, buffer_setting = 1):
 	if not calculate_gamma:
 		rate_cut = [0.0] * BITRATE_LEN
 		rate_cut[0] = INIT_BL_RATIO * BW_UTI_RATIO * average_bw
@@ -246,6 +252,9 @@ def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate
 		rate_cut[2] = INIT_EL_RATIO * BW_UTI_RATIO * average_bw
 		rate_cut[3] = INIT_EL_RATIO * EL_HIGHER_RATIO * BW_UTI_RATIO * average_bw
 		print(rate_cut)
+		optimal_buffer_len = buffer_setting
+		alpha_index = -1
+		gamma_index = -1
 	else:
 		alpha_index = 0
 		gamma_index = 0
@@ -619,7 +628,7 @@ def show_rates(streaming, video_length, coding_type = 2):
 			continue
 		log_bitrate[i] += get_quality(display_bitrate[i], 0.0, 0.0)
 
-	print("Average alpha ratio: ", (total_alpha + 1.0)/video_length)
+	print("Fake alpha ratio: ", (total_alpha + 1.0)/video_length)
 	print("Average effective alpha: ", (total_alpha + 1.0)/(len(el_info) + 1))
 	print("EL existing ratio: ", (len(el_info)+1.0)/video_length)
 	print("Average gamma: ", (total_gamma + 1.0)/video_length)
@@ -636,6 +645,7 @@ def show_rates(streaming, video_length, coding_type = 2):
 	print("Received rate sum: ", sum(deliver_bitrate))
 	print("Average received rate: ", sum(deliver_bitrate)/video_length)	
 	print("Total rebuffering is: %s" % rebuf)
+	print("Number of optimization: %s" % (streaming.rate_cut_version + 1))
 
 	global FIGURE_NUM
 	g = plt.figure(FIGURE_NUM,figsize=(20,5))
@@ -739,9 +749,9 @@ def show_result(streaming, video_length, coding_type):
 
 def get_quality(eff_rate, rebuff, black, zero_rate = False):
 	if not zero_rate:
-		quality = Q_a + Q_b*np.log(eff_rate) - Q_c*rebuff - Q_d*black
+		quality = Q_a + Q_b*np.log(eff_rate) + Q_c*rebuff  + Q_d*black
 	else:
-		quality = - Q_c*rebuff - Q_d*black
+		quality = Q_c*rebuff + Q_d*black
 		# quality = 0.0
 	return quality
 
@@ -843,14 +853,15 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 	quality = [0.0]*video_length
 	per_frame_quality = [0.0]*video_length
 	black_record = [0.0]*video_length
+	freezing_record = [0.0]*video_length
 	info = streaming.evr_recordset
 	rate = streaming.rates
+	black_count = 0
 	# rebuff = 0.0
 	for i in range(inti_buffer_length):
 		deliver_bitrate[i] += rate[-1]
 		display_bitrate[i] += VP_ET_RATIO * rate[-1]
 		quality[i] += get_quality(VP_BT_RATIO*rate[-1], 0.0, 0.0) 
-
 	for i in range(len(info)):
 		black = 0.0
 		index = info[i][0]
@@ -867,9 +878,9 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 			accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, 1.0)
 			assert accuracy <= 1 and accuracy >= 0
 			black = 1.0 - accuracy
-
+			black_count += 1
 			deliver_bitrate[index] += rate[version]
-			display_bitrate[index] += VP_ET_RATIO * rate[version]
+			display_bitrate[index] += VP_ET_RATIO * accuracy * rate[version]
 			if accuracy == 0:
 				quality[index] += get_quality(VP_BT_RATIO * accuracy * rate[version], 0.0, black, True) 
 			else:
@@ -878,8 +889,9 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 		else:
 			deliver_bitrate[index] += 0.0
 			display_bitrate[index] += 0.0
-			quality[index] += get_quality(0.0, 0.0, black, True)
-			per_frame_quality[index] += get_quality(0.0, 0.0, black, True)
+			quality[index] += get_quality(0.0, 1.0, black, True)
+			per_frame_quality[index] += get_quality(0.0, 1.0, black, True)
+			freezing_record[index] += 1
 		black_record[index] += black
 
 	print("Average Quality on chunk (wrong): ", sum(quality)/video_length)	
@@ -889,7 +901,8 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 	print("Received rate sum: ", sum(deliver_bitrate))
 	print("Average received rate: ", sum(deliver_bitrate)/video_length)	
 	# print(black_record)
-	print("Average black ratio is: %s" % (np.sum(black_record)/video_length))
+	print("Total freezing time is : %s" % np.sum(freezing_record))
+	print("Average black ratio is: %s" % (np.sum(black_record)/black_count))
 
 
 
