@@ -22,7 +22,7 @@ if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
 # VP trace
-VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_9_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
+VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_13_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
 
 # System parameters
 BUFFER_BL_INIT = 10
@@ -46,8 +46,8 @@ BW_DALAY_RATIO = 0.95
 
 
 class Streaming(object):
-	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut, optimal_buffer_length, alpha_idx, gamma_idx):
-		self.dy_type = 'adaptive'
+	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut, optimal_buffer_length, alpha_idx, gamma_idx, std_bw):
+		self.dy_type = 'std_adaptive'
 		self.fov_file = alpha_idx
 		self.network_file = gamma_idx
 		self.dynamic = DO_DYNAMIC
@@ -61,6 +61,8 @@ class Streaming(object):
 		self.rate_cut = []
 		self.rate_cut.append(rate_cut)
 		self.rate_cut_version = 0
+		self.rate_cut_time = [0.0]
+
 
 		self.network_ptr = 0
 		self.network_time = 0.0
@@ -89,6 +91,7 @@ class Streaming(object):
 
 		self.last_ref_bw = rate_cut[0] + rate_cut[2]
 		self.last_ref_time = 0.0
+		self.last_ref_relative_std = std_bw/(rate_cut[0] + rate_cut[2])
 
 		self.yaw_predict_value = 0.0
 		self.yaw_predict_quan = 0
@@ -119,6 +122,7 @@ class Streaming(object):
 														self.alpha_history, VIEWPORT_TRACE_FILENAME_NEW, self.rate_cut_version)
 						self.rate_cut.append(new_rate_cut)
 						self.rate_cut_version += 1
+						self.rate_cut_time.append(self.display_time)
 						# Version 1
 						# self.target_et_buffer = new_target_et_buffer
 						# Version 2, adjust buffer length smoothly
@@ -155,9 +159,11 @@ class Streaming(object):
 		if bw_current_period < 0:
 			return False, bw_current_period, std_current_period, bw_real
 		else:
-			if uti.is_bw_change(bw_current_period, self.last_ref_bw):
+			if uti.is_bw_std_change(bw_current_period, std_current_period, self.last_ref_bw, self.last_ref_relative_std):
 				self.last_ref_bw = bw_current_period
+				self.last_ref_relative_std = std_current_period/bw_current_period
 				self.last_ref_time = self.network_time
+				print(self.last_ref_relative_std)
 				return True, bw_current_period, std_current_period, bw_real
 			else:
 				return False, bw_current_period, std_current_period, bw_real
@@ -468,13 +474,19 @@ def main():
 	# network_trace = loadNetworkTrace(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
 	half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, VIDEO_LEN, REGULAR_MULTIPLE, REGULAR_ADD)
 	# network_delay = load_5G.load_5G_latency(DELAY_TRACE)
-	average_bw = uti.show_network(network_trace)
+	if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':		#
+		average_bw, std_bw = uti.show_network(network_trace)
+		print("above is real value")
+		average_bw, std_bw = uti.show_network(network_trace[:150])
+	else:
+		average_bw, std_bw = uti.show_network(network_trace)	
+
 	yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN)
 
 	init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)
 	video_trace = uti.generate_video_trace(init_video_rate, VIDEO_LEN)
 
-	streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx)
+	streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx, std_bw)
 		
 	streaming_sim.run()
 

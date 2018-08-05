@@ -80,19 +80,19 @@ class Streaming(object):
 
 				payload = throughput * duration
 				if payload + video_sent >= self.video_chunk_size:
-					fraction_time = self.video_chunk_size/throughput
+					fraction_time = (self.video_chunk_size - video_sent)/throughput
 					delay += fraction_time
 					print("before network time is: %s and ptr is %s" %(self.network_time, self.network_ptr))
 					self.network_time += fraction_time
 					if self.network_ptr + 1.0 < self.network_time:
-						print("network time is: %s and ptr is %s" %(self.network_time, self.network_ptr))
+						print("less, network time is: %s and ptr is %s" %(self.network_time, self.network_ptr))
 					break
 
 				video_sent += payload
 				delay += duration
 				self.network_time = self.network_ptr + 1.0
 				self.network_ptr += 1
-
+				print("not finish, network time is %s and ptr is %s"%(self.network_time, self.network_ptr))
 				if self.network_ptr > len(self.network_trace):
 					print("network trace is not enough, case 1")
 					self.network_ptr = 0
@@ -154,7 +154,6 @@ class Streaming(object):
 		v = u + 1
 		delta_time = self.buffer_size
 		R_hat = np.minimum(v, delta_time/CHUNK_DURATION) * sniff_bw
-
 		if R_hat >= self.rates[5]:
 			current_video_version = 5
 		elif R_hat >= self.rates[4]:
@@ -170,6 +169,7 @@ class Streaming(object):
 
 		self.video_version = current_video_version
 		self.video_chunk_size = self.rates[current_video_version]
+		print("for chunk %s, rate is %s, v is %s, and delta_time is %s" % (self.video_seg_index, self.video_version, v, delta_time))
 		return 
 
 

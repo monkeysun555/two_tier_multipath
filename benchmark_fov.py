@@ -17,8 +17,8 @@ REGULAR_ADD = 0
 
 VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_13_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
 
-BUFFER_INIT = 1
-Q_REF = 1
+BUFFER_INIT = 2
+Q_REF = 2
 BUFFER_THRESH = Q_REF + 1
 
 CHUNK_DURATION = 1.0
@@ -109,7 +109,8 @@ class Streaming(object):
 						print("not equal case 1", self.video_seg_index, temp_time, self.buffer_size)
 					self.buffer_size = np.maximum(self.buffer_size - duration, 0.0)				
 				self.buffer_history.append([self.buffer_size, self.network_time])
-				assert round(self.buffer_size, 3).is_integer()
+				if not round(self.buffer_size, 3).is_integer():
+					print("Not integer: %s" % round(self.buffer_size, 3))
 				temp_time = self.network_time
 				# assert self.buffer_size == 0.0
 				if self.network_ptr > len(self.network_trace):

@@ -61,6 +61,7 @@ class Streaming(object):
 		self.rate_cut = []
 		self.rate_cut.append(rate_cut)
 		self.rate_cut_version = 0
+		self.rate_cut_time = [0.0]
 
 		self.network_ptr = 0
 		self.network_time = 0.0
@@ -119,6 +120,8 @@ class Streaming(object):
 														self.alpha_history, VIEWPORT_TRACE_FILENAME_NEW, self.rate_cut_version)
 						self.rate_cut.append(new_rate_cut)
 						self.rate_cut_version += 1
+						self.rate_cut_time.append(self.display_time)
+
 						# Version 1
 						# self.target_et_buffer = new_target_et_buffer
 						# Version 2, adjust buffer length smoothly
@@ -468,7 +471,12 @@ def main():
 	# network_trace = loadNetworkTrace(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
 	half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, VIDEO_LEN, REGULAR_MULTIPLE, REGULAR_ADD)
 	# network_delay = load_5G.load_5G_latency(DELAY_TRACE)
-	average_bw = uti.show_network(network_trace)
+	if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':		#
+		average_bw, _ = uti.show_network(network_trace)
+		print("above is real value")
+		average_bw, _ = uti.show_network(network_trace[:150])
+	else:
+		average_bw, _ = uti.show_network(network_trace)	
 	yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN)
 
 	init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)

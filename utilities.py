@@ -18,6 +18,7 @@ BUFFER_RANGE = 4
 ALPHA_CAL_LEN = 30
 GAMMA_CAL_LEN = 10
 BW_THRESHOLD = 0.1
+STD_THRESHOLD = 0.1
 ALPHA_AHEAD = 0.5
 
 ALPHA_CURVE = [[0.860, 0.806, 0.763, 0.698],\
@@ -28,7 +29,9 @@ GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
 			   [0.823, 0.942, 0.978, 1.0],\
 			   [0.780, 0.913, 0.970, 1.0],\
 			   [0.669, 0.797, 0.862, 0.893],\
-			   [0.823, 0.942, 0.978, 1.0]]
+			   [0.823, 0.942, 0.978, 1.0]]			   
+
+			   # [0.888, 0.899, 0.923, 0.945]]		# For static using total trace to do optimization
 
 BT_RATES = [10,30,50,80,120,160,200]
 ET_RATES = [300, 350, 400, 450, 500, 550, 600, 650, 700]
@@ -111,6 +114,43 @@ def rate_optimize(display_time, average_bw, std_bw, alpha_history, version, fov_
 	# return [rate_bt_average, rate_et_low, rate_et_average, rate_et_high], optimal_buffer_len
 	return rate_cuts, optimal_buffer_len
 
+def rate_optimize_std(display_time, average_bw, std_bw, alpha_history, version, fov_file, coding_type = 2):
+	gamma_curve = update_gamma(average_bw, std_bw)
+	alpha_curve = update_alpha(display_time, alpha_history, fov_file, version)
+	alpha_gamma = np.multiply(alpha_curve, gamma_curve)
+	optimal_alpha_gamma = np.amax(alpha_gamma)
+	optimal_buffer_len = np.argmax(alpha_gamma)
+
+	if coding_type == 1:
+		beta = ((1 - optimal_alpha_gamma)*(ET_VER_SPAN*ET_HOR_SPAN))/ \
+				(optimal_alpha_gamma*(BT_VER_SPAN*BT_HOR_SPAN - ET_HOR_SPAN*ET_VER_SPAN))
+
+		rate_et_average = BW_UTI_RATIO*average_bw/ \
+						(1 + (BT_HOR_SPAN*BT_VER_SPAN*beta)/((1-beta)*ET_HOR_SPAN*ET_VER_SPAN))
+	elif coding_type == 2:
+		beta = ((1 - optimal_alpha_gamma)*(ET_VER_SPAN*ET_HOR_SPAN))/ \
+				(optimal_alpha_gamma*BT_VER_SPAN*BT_HOR_SPAN)
+		rate_et_average = BW_UTI_RATIO*average_bw/ \
+				(1 + ((BT_HOR_SPAN*BT_VER_SPAN*beta)/(ET_HOR_SPAN*ET_VER_SPAN)))
+
+	rate_bt_average = BW_UTI_RATIO*average_bw - rate_et_average
+	rate_et_low = rate_et_average * EL_LOWEST_RATIO
+	rate_et_high = rate_et_average * EL_HIGHER_RATIO
+
+	rate_cuts = quantize_bt_et_rate(average_bw, rate_bt_average, rate_et_low, rate_et_average, rate_et_high)
+
+	#update rate cut and rate cut version
+	print("Do a optimzation, current time is %s" % display_time)
+	print("Alpha is: ", alpha_curve)
+	print("Gamma is: ", gamma_curve)
+	print("alpha gamma is: ", alpha_gamma)
+	print("average bw is %s, std is %s, rate_bt is: %s and rate_et is: %s" %(average_bw, std_bw, rate_bt_average, rate_et_average))
+	print("Rate cute is: %s" % rate_cuts)
+	print("<++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++>")
+	print("<++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++>")
+	# return [rate_bt_average, rate_et_low, rate_et_average, rate_et_high], optimal_buffer_len
+	return rate_cuts, optimal_buffer_len
+
 
 def cal_average_bw(network_time, bw_history, last_ref_time):
 	average_gamma_bw = 0.0
@@ -141,8 +181,10 @@ def is_bw_change(current_bw, ref_bw):
 	else:
 		return False
 
-def is_bw_std_change(current_bw, ref_bw):
-	if current_bw >= (1+BW_THRESHOLD)*ref_bw or current_bw <= (1-BW_THRESHOLD)*ref_bw:
+def is_bw_std_change(current_bw, current_std, ref_bw, ref_relative_std):
+	relative_std = current_std/current_bw
+	if current_bw >= (1+BW_THRESHOLD)*ref_bw or current_bw <= (1-BW_THRESHOLD)*ref_bw \
+			or np.abs(relative_std - ref_relative_std) >= STD_THRESHOLD:
 		return True
 	else:
 		return False
@@ -242,15 +284,23 @@ def show_network(network_trace):
 	# print("5G delay peak:", np.max(network_delay))
 	# print("5G delay min:", np.min(network_delay))
 	# print("5G delay median:", np.median(network_delay))
-	return np.mean(network_trace)
+	return np.mean(network_trace), np.std(network_trace)
 
 def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate_gamma = True, buffer_setting = 1):
 	if not calculate_gamma:
 		rate_cut = [0.0] * BITRATE_LEN
+
 		rate_cut[0] = INIT_BL_RATIO * BW_UTI_RATIO * average_bw
 		rate_cut[1] = INIT_EL_RATIO * EL_LOWEST_RATIO * BW_UTI_RATIO * average_bw
 		rate_cut[2] = INIT_EL_RATIO * BW_UTI_RATIO * average_bw
 		rate_cut[3] = INIT_EL_RATIO * EL_HIGHER_RATIO * BW_UTI_RATIO * average_bw
+
+		# For generating gamma
+		# rate_cut[0] = 120
+		# rate_cut[1] = 350
+		# rate_cut[2] = 450
+		# rate_cut[3] = 550
+
 		print(rate_cut)
 		optimal_buffer_len = buffer_setting
 		alpha_index = -1
@@ -628,6 +678,7 @@ def show_rates(streaming, video_length, coding_type = 2):
 			continue
 		log_bitrate[i] += get_quality(display_bitrate[i], 0.0, 0.0)
 
+
 	print("Fake alpha ratio: ", (total_alpha + 1.0)/video_length)
 	print("Average effective alpha: ", (total_alpha + 1.0)/(len(el_info) + 1))
 	print("EL existing ratio: ", (len(el_info)+1.0)/video_length)
@@ -646,12 +697,17 @@ def show_rates(streaming, video_length, coding_type = 2):
 	print("Average received rate: ", sum(deliver_bitrate)/video_length)	
 	print("Total rebuffering is: %s" % rebuf)
 	print("Number of optimization: %s" % (streaming.rate_cut_version + 1))
+	print("<=================================>")
+	print("Rate cut info is as %s" % streaming.rate_cut)
+	print("Rate cut version is as %s" % streaming.rate_cut_version)
+	print("Rate cut time is as %s" % streaming.rate_cut_time)
+
 
 	global FIGURE_NUM
 	g = plt.figure(FIGURE_NUM,figsize=(20,5))
 	FIGURE_NUM += 1
 	plt.plot(range(1,video_length+1), display_bitrate, 'gv-', markersize = 3,\
-	 markeredgewidth = 0.1, markeredgecolor = 'green', linewidth = 2, label='Displayed Effective Video Bitrate')
+	 markeredgewidth = 0.1, markeredgecolor = 'green', linewidth = 2, label='Rendered Video Bitrate')
 	plt.plot(range(1,video_length+1), receive_bitrate, 'ro-', markersize = 4, \
 	 markeredgewidth = 0.05, markeredgecolor = 'red', linewidth = 1, label='Received Effective Video Bitrate')
 	plt.plot(range(1,video_length+1), deliver_bitrate, 'b*-', markersize = 5, \
@@ -664,7 +720,7 @@ def show_rates(streaming, video_length, coding_type = 2):
 	plt.tick_params(axis='both', which='minor', labelsize=30)
 	plt.xticks(np.arange(0, video_length+1, 50))
 	plt.yticks(np.arange(0, 1201, 400))
-	plt.gcf().subplots_adjust(bottom=0.20, left=0.085, right=0.97)	
+	plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)	
 	plt.axis([0, video_length, 0, max(receive_bitrate) + 1200])
 
 	return g
@@ -737,6 +793,10 @@ def show_result(streaming, video_length, coding_type):
 			elif streaming.dy_type == 'adaptive':
 				for fig in figures:
 					fig[0].savefig('./figures/adaptive/adaptive'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
+			elif streaming.dy_type == 'std_adaptive':
+				for fig in figures:
+					fig[0].savefig('./figures/adaptive/std_adaptive'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
+			
 		else:
 			if streaming.dy_type == 'fix':
 				for fig in figures:
@@ -834,6 +894,8 @@ def show_360_result(streaming, video_length, inti_buffer_length):
 		display_bitrate[info[i][0]] += VP_BT_RATIO * rate[info[i][1]]
 		quality[info[i][0]] += get_quality((VP_BT_RATIO * rate[info[i][1]])/VIDEO_FPS, info[i][2], 0.0) 
 		rebuff += info[i][2]
+		if info[i][2] != 0:
+			print(i)
 		if info[i][2] != 0:
 			print(info[i][0])
 			print(info[i][2])
