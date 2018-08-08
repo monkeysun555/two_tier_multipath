@@ -7,15 +7,18 @@ import utilities as uti
 
 VIDEO_LEN = 300
 REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_5.txt'  # 1: partially disturbed  2: unstable  3: stable   4: medium_liyang 5:medium_fanyi
+GAMMA_INDEX = 0
 
 if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':
 	VIDEO_LEN = 450
+	GAMMA_INDEX = 5
+
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
 
 # VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_9_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
 
-BUFFER_INIT = 10
+BUFFER_INIT = 5
 Q_REF = 10
 BUFFER_THRESH = 20
 
@@ -29,6 +32,9 @@ DELAY = 0.01		# second
 
 class Streaming(object):
 	def __init__(self, network_trace, video_rate):
+		self.dy_type = 'naive360'
+		self.network_file = GAMMA_INDEX
+
 		self.network_trace = network_trace
 		# self.download_partial = 0
 

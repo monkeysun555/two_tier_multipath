@@ -13,27 +13,30 @@ CHUNK_DURATION = 1.0
 # GAMMA_CAL_LEN is the length of calculating gamma, in seconds
 ALPHA_DYNAMIC = 1	# <======================= alpha control
 IS_NON_LAYERED = 1  # <======================= whether it is non-layered coding
-IS_SAVING = 0
+IS_SAVING = 0		# for non-dynamic. set to zero
+IS_SAVING_STATIC = 0	# For fov 2, disable all saving
 BUFFER_RANGE = 4
 ALPHA_CAL_LEN = 30
+MIN_ALPHA_CAL_LEN = 30
 GAMMA_CAL_LEN = 10
 BW_THRESHOLD = 0.1
 STD_THRESHOLD = 0.1
-ALPHA_AHEAD = 0.5
+ALPHA_AHEAD = 1.0
 
-ALPHA_CURVE = [[0.860, 0.806, 0.763, 0.698],\
-				[0.763, 0.690, 0.634, 0.585]]
+ALPHA_CURVE = [[0.966, 0.929, 0.882, 0.834],\
+				[0.877, 0.786, 0.707, 0.637]]
 
 GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
 			   [0.883, 0.987, 1.0, 1.0],\
 			   [0.823, 0.942, 0.978, 1.0],\
 			   [0.780, 0.913, 0.970, 1.0],\
 			   [0.669, 0.797, 0.862, 0.893],\
-			   [0.823, 0.942, 0.978, 1.0]]			   
 
-			   # [0.888, 0.899, 0.923, 0.945]]		# For static using total trace to do optimization
+			   [0.823, 0.942, 0.978, 1.0]]			# For static using 150s (first phase), and all other dynamic
 
-BT_RATES = [10,30,50,80,120,160,200]
+			   # [0.888, 0.899, 0.923, 0.945]]		# Only for static using total trace to do optimization
+
+BT_RATES = [10, 30, 50, 80, 120, 160, 200]
 ET_RATES = [300, 350, 400, 450, 500, 550, 600, 650, 700]
 # Rate Allocation
 BITRATE_LEN = 4
@@ -66,11 +69,16 @@ VP_ET_RATIO = (VP_HOR_SPAN*VP_VER_SPAN)/(ET_HOR_SPAN*ET_VER_SPAN)
 # Streaming Quality
 BUFFER_BL_INIT = 10
 BUFFER_EL_INIT = 1
-R_BASE = 100.0
-Q_a = 31.74
-Q_b = 3.3
-Q_c = -10
-Q_d = -10
+
+Q_a = 4.91
+Q_b = 1.89
+Q_c = -1
+Q_d = -1
+
+Q_a_new = -1.518
+Q_b_new = 1.89
+Q_c_new = -1
+Q_d_new = -1
 # Plot info
 FIGURE_NUM = 1
 SHOW_FIG = 1
@@ -215,7 +223,7 @@ def update_alpha(display_time, alpha_history, version, fov_file, buffer_range = 
 	if ALPHA_DYNAMIC:
 		alpha_calculation_len = 0
 		for i in reversed(range(len(alpha_history)-1)):
-			if alpha_history[i][2] != version:
+			if alpha_history[i][2] != version and alpha_history[i][2] != version - 1 and alpha_history[i][2] != version - 2:  # COMMENT IF gamma is 15s, 
 				break
 			alpha_calculation_len += 1	
 
@@ -223,7 +231,7 @@ def update_alpha(display_time, alpha_history, version, fov_file, buffer_range = 
 		# alpha_calculation_len = np.minimum(len(alpha_history)-BUFFER_RANGE, ALPHA_CAL_LEN)
 		# print("alpha_history is: ", alpha_history, alpha_calculation_len)
 		assert alpha_calculation_len >= 1
-		if version > 0 and alpha_calculation_len >= ALPHA_CAL_LEN:	# 100 means will not triggered; if set to "0", change calculation of alpha_calculation_len to upper one
+		if version > 0 and alpha_calculation_len >= MIN_ALPHA_CAL_LEN:	# 100 means will not triggered; if set to "0", change calculation of alpha_calculation_len to upper one
 			for i in range(buffer_range):
 				temp_alpha = 0.0
 				temp_alpha_count = 0
@@ -249,9 +257,9 @@ def update_alpha(display_time, alpha_history, version, fov_file, buffer_range = 
 
 			# Version 2
 			if fov_file == './traces/output/Video_9_alpha_beta_new.mat':
-				alpha = [0.911, 0.870, 0.814, 0.771]
+				alpha = [0.966, 0.929, 0.882, 0.834]
 			elif fov_file == './traces/output/Video_13_alpha_beta_new.mat':
-				alpha = [0.876, 0.728, 0.594, 0.534]
+				alpha = [0.877, 0.786, 0.707, 0.637]
 
 	else:
 		alpha = [0.911, 0.870, 0.814, 0.771]
@@ -360,6 +368,7 @@ def load_viewport(vp_trace, video_length):
 		if math.isnan(yaw_trace_data[i]) or math.isnan(pitch_trace_data[i]):
 			del yaw_trace_data[i]
 			del pitch_trace_data[i]
+	# if vp_trace == ''
 
 	assert len(yaw_trace_data) == len(pitch_trace_data)
 	# yaw_trace_data.tolist().remove(float('nan'))
@@ -573,6 +582,8 @@ def show_rates(streaming, video_length, coding_type = 2):
 	log_bitrate = [0.0]*video_length
 	average_frame_quality = [0.0]*video_length
 	frame_quality_record = [0]*video_length
+	new_quality = [0.0]*video_length
+	new_quality_record = [0]*video_length
 	total_alpha = 0.0	# fov accuracy ratio
 	total_gamma = 0.0	# chunk pass ratio
 	bl_info = streaming.evr_bl_recordset
@@ -631,7 +642,9 @@ def show_rates(streaming, video_length, coding_type = 2):
 			deliver_bitrate[i] += rate_cut[0][-1]
 			average_frame_quality[i] += get_quality((VP_ET_RATIO * rate_cut[0][-1])/VIDEO_FPS, 0.0, 0.0)
 			# print(average_frame_quality)
+			new_quality[i] += new_get_quality(VP_ET_RATIO * rate_cut[0][-1], 0.0, 0.0)
 			frame_quality_record[i] = 1
+			new_quality_record[i] = 1
 
 		for i in range(len(bl_info)):
 			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
@@ -656,6 +669,18 @@ def show_rates(streaming, video_length, coding_type = 2):
 									display_bitrate[el_info[i][0]], VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]])
 			frame_quality_record[el_info[i][0]] = 1
 
+			if VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]] == 0:
+				new_quality[el_info[i][0]] += new_get_quality(VP_BT_RATIO * rate_cut[el_info[i][10]][0], 0.0, 0.0)
+				new_quality_record[el_info[i][0]] = 1
+			else:
+				# et_existing_ratio = time_eff * el_accuracy
+				# assert et_existing_ratio > 0
+				# frame_level_eff = len(real_yaw_trace)/VIDEO_FPS
+				new_quality[el_info[i][0]] += (1-time_eff) * new_get_quality(display_bitrate[el_info[i][0]], 0.0, 0.0)
+				new_quality[el_info[i][0]] += time_eff * el_accuracy*new_get_quality(VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]], 0.0, 0.0)
+				new_quality[el_info[i][0]] += time_eff * (1-el_accuracy)*new_get_quality(display_bitrate[el_info[i][0]], 0.0, 0.0)
+				new_quality_record[el_info[i][0]] = 1
+
 			if time_eff == 0:
 				assert el_accuracy == 0
 			receive_bitrate[el_info[i][0]] = 0
@@ -665,12 +690,17 @@ def show_rates(streaming, video_length, coding_type = 2):
 			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
 
 			deliver_bitrate[el_info[i][0]] += rate_cut[el_info[i][10]][el_info[i][1]]
+
 			total_alpha += el_accuracy
 			total_gamma += time_eff
 
 	for i in range(len(average_frame_quality)):
 		if frame_quality_record[i] == 0:
 			average_frame_quality[i] += get_quality(display_bitrate[i]/VIDEO_FPS, 0.0, 0.0)
+
+	for i in range(len(new_quality_record)):
+		if new_quality_record[i] == 0:
+			new_quality[i] += new_get_quality(display_bitrate[i], 0.0, 0.0)
 
 	for i in range(len(display_bitrate)):	# to QoE
 		if display_bitrate[i] == 0.0:
@@ -691,6 +721,7 @@ def show_rates(streaming, video_length, coding_type = 2):
 	# print(video_length)
 	print("Average Quality (wrong): ", sum(log_bitrate)/video_length)	 ##
 	print("Averate Per Frame Quality (right): ", sum(average_frame_quality)/video_length)
+	print("Average Quality (new rate): ", sum(new_quality)/video_length)		
 	print("Displayed rate sum: ", sum(display_bitrate))
 	print("Average Displayed rate: ", sum(display_bitrate)/video_length)	
 	print("Received rate sum: ", sum(deliver_bitrate))
@@ -707,27 +738,28 @@ def show_rates(streaming, video_length, coding_type = 2):
 	g = plt.figure(FIGURE_NUM,figsize=(20,5))
 	FIGURE_NUM += 1
 	plt.plot(range(1,video_length+1), display_bitrate, 'gv-', markersize = 3,\
-	 markeredgewidth = 0.1, markeredgecolor = 'green', linewidth = 2, label='Rendered Video Bitrate')
+	 markeredgewidth = 0.1, markeredgecolor = 'green', linewidth = 2, label='Rendered Bitrate')
 	plt.plot(range(1,video_length+1), receive_bitrate, 'ro-', markersize = 4, \
-	 markeredgewidth = 0.05, markeredgecolor = 'red', linewidth = 1, label='Received Effective Video Bitrate')
+	 markeredgewidth = 0.05, markeredgecolor = 'red', linewidth = 1, label='Received Effective Bitrate')
 	plt.plot(range(1,video_length+1), deliver_bitrate, 'b*-', markersize = 5, \
-	 markeredgewidth = 0.2, markeredgecolor = 'blue', linewidth = 2, label='Received Video Bitrate')
-	plt.legend(loc='upper right', fontsize=22)
+	 markeredgewidth = 0.2, markeredgecolor = 'blue', linewidth = 2, label='Received Bitrate')
+	plt.legend(loc='upper right', fontsize=22, ncol=3, mode='expand')
 	# plt.title('Effective & Received Video Bitrate')
 	plt.xlabel('Second', fontsize =30)
 	plt.ylabel('Mbps',fontsize = 30)
 	plt.tick_params(axis='both', which='major', labelsize=30)
 	plt.tick_params(axis='both', which='minor', labelsize=30)
 	plt.xticks(np.arange(0, video_length+1, 50))
-	plt.yticks(np.arange(0, 1201, 400))
+	plt.yticks(np.arange(200, 1201, 200))
 	plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)	
-	plt.axis([0, video_length, 0, max(receive_bitrate) + 1200])
+	plt.axis([0, video_length, 0, 1200])
 
 	return g
 
 def show_buffer(streaming, video_length):
 	## Plot buffer length
 	buffer_info = streaming.buffer_history
+
 	# print(len(buffer_info))
 	# print(buffer_info)
 	if np.ceil(streaming.display_time) < video_length:
@@ -740,22 +772,102 @@ def show_buffer(streaming, video_length):
 	global FIGURE_NUM
 	a = plt.figure(FIGURE_NUM,figsize=(20,5))
 	FIGURE_NUM +=1
+
+	columns = 2
+	if len(streaming.rate_cut_time) > 1:
+		# Plot target
+		columns = 3
+		target_info = streaming.target_buffer_history
+		count = 0
+		next_time = streaming.rate_cut_time[count+1]
+		target_number = len(streaming.rate_cut_time)
+		target_buffer_plot = [0.0]*video_length
+
+
+		for i in range(video_length):
+			if i >= next_time:
+				count += 1
+				if count >= target_number - 1:
+					next_time = video_length + 100
+				else:
+					next_time = streaming.rate_cut_time[count+1]
+				# plt.plot((i,i), (0, 20), '--', color='gray', linewidth=1.5)
+			target_buffer_plot[i] = target_info[count] + 1
+
+		plt.plot(range(1, video_length+1), target_buffer_plot,'b^-', markersize = 4, markeredgewidth = 0.5, \
+				linewidth = 2, markeredgecolor = 'blue',  label='ET Target Buffer Length')
+
 	plt.plot(range(1, video_length+1), [row[0] for row in buffer_info],'k*-', markersize = 6, markeredgewidth = 0.5, \
 			linewidth = 2, markeredgecolor = 'black',  label='BT Buffer Length')
 	plt.plot(range(1, video_length+1), [row[1] for row in buffer_info],'ro-', markersize = 2, markeredgewidth = 0.5, \
 			linewidth = 2, markeredgecolor = 'red',  label='ET Buffer Length')
 
-	plt.legend(loc='upper right', fontsize=30)
+
+	plt.legend(loc='upper right', fontsize=20, ncol=columns)
 	# plt.title('BT/ET Buffer Length', fontsize=30)
 	plt.xlabel('Second', fontsize=30)
 	plt.ylabel('Second', fontsize=30)
 	plt.tick_params(axis='both', which='major', labelsize=30)
 	plt.tick_params(axis='both', which='minor', labelsize=30)
 	plt.xticks(np.arange(0, video_length+1, 50))
-	plt.yticks(np.arange(0, 21, 5))
+	plt.yticks(np.arange(5, 21, 5))
 	plt.gcf().subplots_adjust(bottom=0.20, left=0.085, right=0.97)	
-	plt.axis([0, video_length, 0, 20])
+	plt.axis([0, video_length, 0, 13])
 	return a 
+
+def show_rate_cuts(streaming, video_length):
+	count = 0
+	cuts_number = len(streaming.rate_cut_time)
+
+	next_time = streaming.rate_cut_time[count+1]
+	bts = [0.0]*video_length
+	et1s = [0.0]*video_length
+	et2s = [0.0]*video_length
+	et3s = [0.0]*video_length
+
+
+	global FIGURE_NUM
+	a = plt.figure(FIGURE_NUM,figsize=(20,5))
+	FIGURE_NUM +=1
+
+	for i in range(video_length):
+		if i >= next_time:
+			count += 1
+			if count >= cuts_number - 1:
+				next_time = video_length + 100
+			else:
+				next_time = streaming.rate_cut_time[count+1]
+			plt.plot((i,i), (0, 1800), '--', color='gray', linewidth=1.5)
+		bts[i] = streaming.rate_cut[count][0]
+		et1s[i] = streaming.rate_cut[count][1]
+		et2s[i] = streaming.rate_cut[count][2]
+		et3s[i] = streaming.rate_cut[count][3]
+
+
+	plt.plot(range(1, video_length+1), bts,'k-', \
+			linewidth = 2, label='BT Rate')
+
+	plt.plot(range(1, video_length+1), et1s,'r-', \
+			linewidth = 2, label='Lowest ET Rate')
+
+	plt.plot(range(1, video_length+1), et2s,'b-', \
+			linewidth = 2, label='Medium ET Rate')
+
+	plt.plot(range(1, video_length+1), et3s,'g-', \
+			linewidth = 2, label='Highest ET Rate')
+
+	plt.legend(loc='upper right', fontsize=22, ncol=4, mode='expand')
+	# plt.title('BT/ET Buffer Length', fontsize=30)
+	plt.xlabel('Second', fontsize=30)
+	plt.ylabel('Mbps', fontsize=30)
+	plt.tick_params(axis='both', which='major', labelsize=30)
+	plt.tick_params(axis='both', which='minor', labelsize=30)
+	plt.xticks(np.arange(0, video_length+1, 50))
+	plt.yticks(np.arange(200, 1601, 200))
+	plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)	
+	plt.axis([0, video_length, 0, 1000])
+	return a 
+
 
 def show_bw(streaming):
 	for i in range(len(streaming.video_bw_history)):
@@ -775,6 +887,10 @@ def show_result(streaming, video_length, coding_type):
 	#	display and received bitrates
 	figures.append([show_rates(streaming, video_length, coding_type),'rate'])
 
+	if streaming.dynamic == 1:
+		figures.append([show_rate_cuts(streaming, video_length), 'cuts'])
+
+
 	# figures.append([show_received_rates(streaming, video_length, coding_type),'received_rate'])
 
 	# show_bw(streaming)
@@ -790,12 +906,14 @@ def show_result(streaming, video_length, coding_type):
 			if streaming.dy_type == 'fix':
 				for fig in figures:
 					fig[0].savefig('./figures/fix/fix'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
+			
 			elif streaming.dy_type == 'adaptive':
 				for fig in figures:
 					fig[0].savefig('./figures/adaptive/adaptive'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
+			
 			elif streaming.dy_type == 'std_adaptive':
 				for fig in figures:
-					fig[0].savefig('./figures/adaptive/std_adaptive'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
+					fig[0].savefig('./figures/std_adaptive/std_adaptive'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
 			
 		else:
 			if streaming.dy_type == 'fix':
@@ -806,10 +924,16 @@ def show_result(streaming, video_length, coding_type):
 
 	return
 
+def new_get_quality(eff_rate, rebuff, black, zero_rate = False):
+	if not zero_rate:
+		quality = Q_a_new + Q_b_new * np.log(eff_rate) + Q_c_new*rebuff + Q_d*black
+	else:
+		quality = Q_c_new*rebuff + Q_d_new*black
+	return quality
 
 def get_quality(eff_rate, rebuff, black, zero_rate = False):
 	if not zero_rate:
-		quality = Q_a + Q_b*np.log(eff_rate) + Q_c*rebuff  + Q_d*black
+		quality = Q_a + Q_b * np.log(eff_rate) + Q_c*rebuff  + Q_d*black
 	else:
 		quality = Q_c*rebuff + Q_d*black
 		# quality = 0.0
@@ -837,10 +961,31 @@ def frame_nlc_quality(quan_yaw, quan_pitch, real_yaw_trace, real_pitch_trace, ti
 		pitch_distance = np.abs(pred_pitch_value - real_pitch_trace[i])
 		pitch_accuracy = np.minimum(1.0, np.maximum(0.0, (VP_VER_SPAN + ET_VER_SPAN)/2.0 - pitch_distance)/VP_VER_SPAN)
 		area_accuracy = yaw_accuracy * pitch_accuracy
-		eff_frame_rate = (base_rate/VIDEO_FPS) * (1.0 - area_accuracy) + (et_rate/VIDEO_FPS)*area_accuracy
-		# print(area_accuracy, base_rate/VIDEO_FPS, et_rate/VIDEO_FPS)
-		quality_with_et += get_quality(eff_frame_rate, 0.0, 0.0)
+		quality_with_et_bt = 0.0
+		quality_with_et_et = 0.0
+		# area_accuracy = 1
 
+		if area_accuracy != 0 and area_accuracy != 1:
+			eff_frame_rate_bt = base_rate/VIDEO_FPS
+			eff_frame_rate_et = et_rate/VIDEO_FPS
+			# print(area_accuracy, base_rate/VIDEO_FPS, et_rate/VIDEO_FPS)
+			quality_with_et_bt = get_quality(eff_frame_rate_bt, 0.0, 0.0) * (1.0 - area_accuracy)
+			quality_with_et_et = get_quality(eff_frame_rate_et, 0.0, 0.0) * area_accuracy
+			quality_with_et += quality_with_et_bt
+			quality_with_et += quality_with_et_et
+
+		elif area_accuracy == 0:
+			eff_frame_rate_bt = base_rate/VIDEO_FPS			
+			quality_with_et_bt = get_quality(eff_frame_rate_bt, 0.0, 0.0)
+			quality_with_et += quality_with_et_bt	
+
+		elif area_accuracy == 1:					
+			eff_frame_rate_et = et_rate/VIDEO_FPS 
+			quality_with_et_et = get_quality(eff_frame_rate_et, 0.0, 0.0)
+			quality_with_et += quality_with_et_et
+		else:
+			print("impossible to happen!")
+		
 	per_frame_quality = ((quality_with_et + quality_without_et)/VIDEO_FPS)
 	# print(per_frame_quality)
 	return per_frame_quality
@@ -874,25 +1019,58 @@ def frame_nlc_fov_quality(quan_yaw, quan_pitch, real_yaw_trace, real_pitch_trace
 	return per_frame_quality
 
 ##############
+# Deprecated
+def show_360_buffer(streaming, video_length):
+	buffer_info = streaming.buffer_history
+	# print(len(buffer_info))
+	print(buffer_info)
+	if np.ceil(streaming.display_time) < video_length:
+		time_to_end = video_length - int(np.ceil(streaming.display_time))
+		for i in range(time_to_end):
+			buffer_info.append([ np.maximum(buffer_info[-1][0]-1, 0), buffer_info[-1][1]+1])
+	# print(buffer_info)
+	# print(streaming.display_time)
+	print(len(buffer_info))
+	global FIGURE_NUM
+	a = plt.figure(FIGURE_NUM,figsize=(20,5))
+	FIGURE_NUM +=1
+	plt.plot(range(1, video_length+1), [row[0] for row in buffer_info],'k*-', markersize = 6, markeredgewidth = 0.5, \
+			linewidth = 2, markeredgecolor = 'black',  label='BT Buffer Length')
+	# plt.plot(range(1, video_length+1), [row[1] for row in buffer_info],'ro-', markersize = 2, markeredgewidth = 0.5, \
+	# 		linewidth = 2, markeredgecolor = 'red',  label='ET Buffer Length')
+
+	plt.legend(loc='upper right', fontsize=30)
+	# plt.title('BT/ET Buffer Length', fontsize=30)
+	plt.xlabel('Second', fontsize=30)
+	plt.ylabel('Second', fontsize=30)
+	plt.tick_params(axis='both', which='major', labelsize=30)
+	plt.tick_params(axis='both', which='minor', labelsize=30)
+	plt.xticks(np.arange(0, video_length+1, 50))
+	plt.yticks(np.arange(0, 21, 5))
+	plt.gcf().subplots_adjust(bottom=0.20, left=0.085, right=0.97)	
+	plt.axis([0, video_length, 0, 30])
+	return a 
 
 def show_360_result(streaming, video_length, inti_buffer_length):
 	print("length of record is: %s" % len(streaming.evr_recordset))
 	deliver_bitrate = [0.0]*video_length
 	display_bitrate = [0.0]*video_length
 	quality = [0.0]*video_length
+	new_quality = [0.0]*video_length
 	info = streaming.evr_recordset
 	rate = streaming.rates
 	rebuff = 0.0
 	for i in range(inti_buffer_length):
-		deliver_bitrate[i] += rate[-1]
-		display_bitrate[i] += VP_BT_RATIO * rate[-1]
+		deliver_bitrate[i] += rate[-3]
+		display_bitrate[i] += VP_BT_RATIO * rate[-3]
 		quality[i] += get_quality(VP_BT_RATIO*rate[-1]/VIDEO_FPS, 0.0, 0.0) 
-
+		new_quality[i] += new_get_quality(VP_BT_RATIO*rate[-1], 0.0, 0.0)
 
 	for i in range(len(info)):
 		deliver_bitrate[info[i][0]] += rate[info[i][1]]
 		display_bitrate[info[i][0]] += VP_BT_RATIO * rate[info[i][1]]
 		quality[info[i][0]] += get_quality((VP_BT_RATIO * rate[info[i][1]])/VIDEO_FPS, info[i][2], 0.0) 
+		new_quality[i] += new_get_quality(VP_BT_RATIO * rate[info[i][1]], info[i][2], 0.0)
 		rebuff += info[i][2]
 		if info[i][2] != 0:
 			print(i)
@@ -901,18 +1079,53 @@ def show_360_result(streaming, video_length, inti_buffer_length):
 			print(info[i][2])
 			print(len(streaming.buffer_history))
 
-	print("Average Quality (per frame, right): ", sum(quality)/video_length)	
+	# figures = []
+	# figures.append([show_360_buffer(streaming, video_length), 'buffer'])
+
+	# if IS_SAVING:
+	# 	for fig in figures:
+	# 		fig[0].savefig('./figures/naive360'+fig[1]+str(streaming.network_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
+		
+	# if SHOW_FIG:
+	# 	show_figure(figures)	
+
+	print("Average Quality (per frame, right): ", sum(quality)/video_length)
+	print("Average Quality (new rate): ", sum(new_quality)/video_length)		
 	print("Displayed rate sum: ", sum(display_bitrate))
 	print("Average Displayed rate: ", sum(display_bitrate)/video_length)	
 	print("Received rate sum: ", sum(deliver_bitrate))
 	print("Average received rate: ", sum(deliver_bitrate)/video_length)	
 	print("Total rebuffering is: %s" % rebuff)
 
+
+	global FIGURE_NUM
+	g = plt.figure(FIGURE_NUM,figsize=(20,5))
+	FIGURE_NUM += 1
+	plt.plot(range(1,video_length+1), display_bitrate, 'r-', linewidth = 2, label='Rendered Video Bitrate')
+
+	plt.plot(range(1,video_length+1), deliver_bitrate, 'b-', linewidth = 2, label='Received Video Bitrate')
+	plt.legend(loc='upper right', fontsize=22, ncol=2)
+	# plt.title('Effective & Received Video Bitrate')
+	plt.xlabel('Second', fontsize =30)
+	plt.ylabel('Mbps',fontsize = 30)
+	plt.tick_params(axis='both', which='major', labelsize=30)
+	plt.tick_params(axis='both', which='minor', labelsize=30)
+	plt.xticks(np.arange(0, video_length+1, 50))
+	plt.yticks(np.arange(400, 1201, 400))
+	plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)	
+	plt.axis([0, video_length, 0, 1100])
+
+	g.show()
+	raw_input()
+	if IS_SAVING_STATIC:
+		g.savefig('./figures/naive360/naive_'+str(streaming.network_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
+
 def show_fov_result(streaming, video_length, inti_buffer_length):
 	print("length of record is: %s" % len(streaming.evr_recordset))
 	deliver_bitrate = [0.0]*video_length
 	display_bitrate = [0.0]*video_length
 	quality = [0.0]*video_length
+	new_quality = [0.0]*video_length
 	per_frame_quality = [0.0]*video_length
 	black_record = [0.0]*video_length
 	freezing_record = [0.0]*video_length
@@ -923,7 +1136,9 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 	for i in range(inti_buffer_length):
 		deliver_bitrate[i] += rate[-1]
 		display_bitrate[i] += VP_ET_RATIO * rate[-1]
-		quality[i] += get_quality(VP_BT_RATIO*rate[-1], 0.0, 0.0) 
+		quality[i] += get_quality(VP_ET_RATIO*rate[-1], 0.0, 0.0) 
+		new_quality[i] += new_get_quality(VP_ET_RATIO*rate[-1], 0.0, 0.0)
+
 	for i in range(len(info)):
 		black = 0.0
 		index = info[i][0]
@@ -944,20 +1159,24 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 			deliver_bitrate[index] += rate[version]
 			display_bitrate[index] += VP_ET_RATIO * accuracy * rate[version]
 			if accuracy == 0:
-				quality[index] += get_quality(VP_BT_RATIO * accuracy * rate[version], 0.0, black, True) 
+				quality[index] += get_quality(VP_ET_RATIO * accuracy * rate[version], 0.0, black, True)
+				new_quality[index] += new_get_quality(0.0, 0.0, black, True) 
 			else:
-				quality[index] += get_quality(VP_BT_RATIO * accuracy * rate[version], 0.0, black) 
-				per_frame_quality[index] += frame_nlc_fov_quality(quan_yaw, quan_pitch, real_yaw_trace, real_pitch_trace, 1.0, rate[version])
+				quality[index] += get_quality(VP_ET_RATIO * accuracy * rate[version], 0.0, black) 
+				new_quality[index] += new_get_quality(VP_ET_RATIO * accuracy * rate[version], 0.0, black) 
+				per_frame_quality[index] += frame_nlc_fov_quality(quan_yaw, quan_pitch, real_yaw_trace, real_pitch_trace, 1.0, VP_ET_RATIO * rate[version])
 		else:
 			deliver_bitrate[index] += 0.0
 			display_bitrate[index] += 0.0
 			quality[index] += get_quality(0.0, 1.0, black, True)
 			per_frame_quality[index] += get_quality(0.0, 1.0, black, True)
+			new_quality[index] += new_get_quality(0.0, 1.0, black, True) 
 			freezing_record[index] += 1
 		black_record[index] += black
 
 	print("Average Quality on chunk (wrong): ", sum(quality)/video_length)	
 	print("Average Quality (per frame, right): ", sum(per_frame_quality)/video_length)	
+	print("Average Quality (new rate): ", sum(new_quality)/video_length)		
 	print("Displayed rate sum: ", sum(display_bitrate))
 	print("Average Displayed rate: ", sum(display_bitrate)/video_length)	
 	print("Received rate sum: ", sum(deliver_bitrate))
@@ -966,5 +1185,25 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 	print("Total freezing time is : %s" % np.sum(freezing_record))
 	print("Average black ratio is: %s" % (np.sum(black_record)/black_count))
 
+	global FIGURE_NUM
+	g = plt.figure(FIGURE_NUM,figsize=(20,5))
+	FIGURE_NUM += 1
+	plt.plot(range(1,video_length+1), display_bitrate, 'r-', linewidth = 2, label='Rendered Video Bitrate')
 
+	plt.plot(range(1,video_length+1), deliver_bitrate, 'b-', linewidth = 2, label='Received Video Bitrate')
+	plt.legend(loc='upper right', fontsize=22, ncol=2)
+	# plt.title('Effective & Received Video Bitrate')
+	plt.xlabel('Second', fontsize =30)
+	plt.ylabel('Mbps',fontsize = 30)
+	plt.tick_params(axis='both', which='major', labelsize=30)
+	plt.tick_params(axis='both', which='minor', labelsize=30)
+	plt.xticks(np.arange(0, video_length+1, 50))
+	plt.yticks(np.arange(400, 1201, 400))
+	plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)	
+	plt.axis([0, video_length, 0, 1000])
+
+	g.show()
+	raw_input()
+	if IS_SAVING_STATIC:
+		g.savefig('./figures/predictive/pred_'+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
 

@@ -15,11 +15,31 @@ if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
 
-VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_13_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
+VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_9_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
+
+
+if VIEWPORT_TRACE_FILENAME_NEW == './traces/output/Video_9_alpha_beta_new.mat':
+	ALPHA_INDEX = 0
+elif VIEWPORT_TRACE_FILENAME_NEW == './traces/output/Video_13_alpha_beta_new.mat':
+	ALPHA_INDEX = 1
+
+if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_0.txt':
+	GAMMA_INDEX = 0
+elif REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_1.txt':
+	GAMMA_INDEX = 1
+elif REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_2.txt':
+	GAMMA_INDEX = 2
+elif REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_3.txt':
+	GAMMA_INDEX = 3
+elif REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_4.txt':
+	GAMMA_INDEX = 4
+elif REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':
+	GAMMA_INDEX = 5
+
 
 BUFFER_INIT = 2
-Q_REF = 2
-BUFFER_THRESH = Q_REF + 1
+Q_REF = 1
+BUFFER_THRESH = Q_REF + 2
 
 CHUNK_DURATION = 1.0
 KP = 0.6		# P controller
@@ -30,6 +50,12 @@ DELAY = 0.01		# second
 
 class Streaming(object):
 	def __init__(self, network_trace, yaw_trace, pitch_trace, video_rate):
+		
+		self.dy_type = 'fix'
+		self.fov_file = ALPHA_INDEX
+		self.network_file = GAMMA_INDEX
+
+
 		self.network_trace = network_trace
 		self.yaw_trace = yaw_trace
 		self.pitch_trace = pitch_trace
