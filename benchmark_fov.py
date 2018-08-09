@@ -15,7 +15,7 @@ if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
 
-VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_9_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
+VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_13_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
 
 
 if VIEWPORT_TRACE_FILENAME_NEW == './traces/output/Video_9_alpha_beta_new.mat':
@@ -38,7 +38,7 @@ elif REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':
 
 
 BUFFER_INIT = 2
-Q_REF = 1
+Q_REF = 2
 BUFFER_THRESH = Q_REF + 2
 
 CHUNK_DURATION = 1.0

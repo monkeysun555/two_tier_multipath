@@ -588,6 +588,8 @@ def show_rates(streaming, video_length, coding_type = 2):
 	total_gamma = 0.0	# chunk pass ratio
 	bl_info = streaming.evr_bl_recordset
 	el_info = streaming.evr_el_recordset
+	total_bt_rate = 0.0
+	total_et_rate = 0.0
 	# <update> later
 	rate_cut = streaming.rate_cut
 	rebuf = streaming.freezing_time
@@ -635,6 +637,7 @@ def show_rates(streaming, video_length, coding_type = 2):
 			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
 			receive_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
 			deliver_bitrate[i] += rate_cut[0][0]
+			total_bt_rate += rate_cut[0][0]
 
 		for i in range(BUFFER_EL_INIT):
 			display_bitrate[i] = VP_ET_RATIO * rate_cut[0][-1]
@@ -645,11 +648,13 @@ def show_rates(streaming, video_length, coding_type = 2):
 			new_quality[i] += new_get_quality(VP_ET_RATIO * rate_cut[0][-1], 0.0, 0.0)
 			frame_quality_record[i] = 1
 			new_quality_record[i] = 1
+			total_et_rate += rate_cut[0][-1]
 
 		for i in range(len(bl_info)):
 			display_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
 			receive_bitrate[bl_info[i][0]] += VP_BT_RATIO * rate_cut[bl_info[i][5]][bl_info[i][1]]
 			deliver_bitrate[bl_info[i][0]] += rate_cut[bl_info[i][5]][bl_info[i][1]]
+			total_bt_rate += rate_cut[bl_info[i][5]][bl_info[i][1]]
 
 		for i in range(len(el_info)):
 			time_eff = el_info[i][9]
@@ -686,10 +691,12 @@ def show_rates(streaming, video_length, coding_type = 2):
 			receive_bitrate[el_info[i][0]] = 0
 			receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
 
+
 			display_bitrate[el_info[i][0]] -= time_eff * el_accuracy * display_bitrate[el_info[i][0]]
 			display_bitrate[el_info[i][0]] += VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]]
 
 			deliver_bitrate[el_info[i][0]] += rate_cut[el_info[i][10]][el_info[i][1]]
+			total_et_rate += rate_cut[el_info[i][10]][el_info[i][1]]
 
 			total_alpha += el_accuracy
 			total_gamma += time_eff
@@ -713,7 +720,8 @@ def show_rates(streaming, video_length, coding_type = 2):
 	print("Average effective alpha: ", (total_alpha + 1.0)/(len(el_info) + 1))
 	print("EL existing ratio: ", (len(el_info)+1.0)/video_length)
 	print("Average gamma: ", (total_gamma + 1.0)/video_length)
-
+	print("Average BT rates", total_bt_rate/video_length)
+	print("Average ET rates", total_et_rate/video_length)
 	# print("Displayed effective rate sum: ", sum(display_bitrate))
 	# print("Received effective rate sum: ", sum(receive_bitrate))
 	# print("Log rate sum: ", sum(log_bitrate))
@@ -732,6 +740,7 @@ def show_rates(streaming, video_length, coding_type = 2):
 	print("Rate cut info is as %s" % streaming.rate_cut)
 	print("Rate cut version is as %s" % streaming.rate_cut_version)
 	print("Rate cut time is as %s" % streaming.rate_cut_time)
+
 
 
 	global FIGURE_NUM
@@ -1129,6 +1138,7 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 	per_frame_quality = [0.0]*video_length
 	black_record = [0.0]*video_length
 	freezing_record = [0.0]*video_length
+	q_r = [0.0]*video_length
 	info = streaming.evr_recordset
 	rate = streaming.rates
 	black_count = 0
@@ -1138,6 +1148,7 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 		display_bitrate[i] += VP_ET_RATIO * rate[-1]
 		quality[i] += get_quality(VP_ET_RATIO*rate[-1], 0.0, 0.0) 
 		new_quality[i] += new_get_quality(VP_ET_RATIO*rate[-1], 0.0, 0.0)
+		q_r[i] += get_quality(VP_ET_RATIO*rate[-1], 0.0, 0.0)
 
 	for i in range(len(info)):
 		black = 0.0
@@ -1165,6 +1176,7 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 				quality[index] += get_quality(VP_ET_RATIO * accuracy * rate[version], 0.0, black) 
 				new_quality[index] += new_get_quality(VP_ET_RATIO * accuracy * rate[version], 0.0, black) 
 				per_frame_quality[index] += frame_nlc_fov_quality(quan_yaw, quan_pitch, real_yaw_trace, real_pitch_trace, 1.0, VP_ET_RATIO * rate[version])
+				q_r[index] += new_get_quality(VP_ET_RATIO * accuracy * rate[version], 0.0, 0.0)
 		else:
 			deliver_bitrate[index] += 0.0
 			display_bitrate[index] += 0.0
@@ -1176,7 +1188,8 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 
 	print("Average Quality on chunk (wrong): ", sum(quality)/video_length)	
 	print("Average Quality (per frame, right): ", sum(per_frame_quality)/video_length)	
-	print("Average Quality (new rate): ", sum(new_quality)/video_length)		
+	print("Average Quality (new rate): ", sum(new_quality)/video_length)
+	print("Average Q_r for FOV only", sum(q_r)/video_length)		
 	print("Displayed rate sum: ", sum(display_bitrate))
 	print("Average Displayed rate: ", sum(display_bitrate)/video_length)	
 	print("Received rate sum: ", sum(deliver_bitrate))
