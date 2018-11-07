@@ -53,10 +53,10 @@ BW_PRED_SAMPLE_SIZE = 10
 #	 32: 2 13
 #######
 R_MIN = 100.0
-VER = 21
+VER = 12
 VIEWPORT_TRACE_FILENAME = 'view_angle_combo_video1.mat'  ##video 1-4
-VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_9_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
-REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_1.txt'  # 1: partially disturbed  2: unstable  3: stable   4: medium_liyang 5:medium_fanyi
+VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_13_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
+REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_4.txt'  # 0: stable 4: partially disturbed  5: unstable 
 # DELAY_TRACE = './traces/bandwidth/delay_1.txt'
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
@@ -271,7 +271,7 @@ class streaming(object):
 			###############
 			v = u + 1
 			delta_time = self.buffer_size_EL
-			R_hat = min(v, delta_time + u) * sniff_BW
+			R_hat = min(v, delta_time) * sniff_BW
 			# print(R_hat, self.buffer_size_EL, u_i, u_p, self.video_download_timestamp)
 			#########
 			# print(R_hat, sniff_BW, self.video_seg_index_EL)

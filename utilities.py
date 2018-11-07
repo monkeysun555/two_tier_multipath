@@ -32,9 +32,14 @@ GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
 			   [0.780, 0.913, 0.970, 1.0],\
 			   [0.669, 0.797, 0.862, 0.893],\
 
-			   [0.823, 0.942, 0.978, 1.0]]			# For static using 150s (first phase), and all other dynamic
+				# For static using 150s (first phase), and all other dynamic
+			   [0.823, 0.942, 0.978, 1.0],\
 
-			   # [0.888, 0.899, 0.923, 0.945]]		# Only for static using total trace to do optimization
+
+				# Only for static using total trace to do optimization
+			   # [0.888, 0.899, 0.923, 0.945],\
+
+			   [1.0, 1.0, 1.0, 1.0]]
 
 BT_RATES = [10, 30, 50, 80, 120, 160, 200]
 ET_RATES = [300, 350, 400, 450, 500, 550, 600, 650, 700]
@@ -320,6 +325,8 @@ def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate
 			alpha_index = 0
 		elif fov_file == './traces/output/Video_13_alpha_beta_new.mat':
 			alpha_index = 1
+		else:
+			alpha_index = 2
 
 		if video_file == './traces/bandwidth/BW_Trace_5G_0.txt':
 			gamma_index = 0
@@ -333,6 +340,9 @@ def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate
 			gamma_index = 4
 		elif video_file == './traces/bandwidth/BW_Trace_5G_5.txt':
 			gamma_index = 5
+		else:
+			gamma_index = 6
+			
 		alpha_curve = ALPHA_CURVE[alpha_index]
 		gamma_curve = GAMMA_CURVE[gamma_index]
 
@@ -545,12 +555,15 @@ def calculate_rate_cute_non_layer(average_bw, alpha_curve, gamma_curve, coding_t
 	optimal_alpha_gamma = np.amax(alpha_gamma)
 	optimal_buffer_len = np.argmax(alpha_gamma)
 
+	# Layered coding
 	if coding_type == 1:
 		beta = ((1 - optimal_alpha_gamma)*(ET_VER_SPAN*ET_HOR_SPAN))/ \
 				(optimal_alpha_gamma*(BT_VER_SPAN*BT_HOR_SPAN - ET_HOR_SPAN*ET_VER_SPAN))
 
 		rate_et_average = BW_UTI_RATIO*average_bw/ \
 						(1 + (BT_HOR_SPAN*BT_VER_SPAN*beta)/((1-beta)*ET_HOR_SPAN*ET_VER_SPAN))
+
+	# Non-layered coding
 	elif coding_type == 2:
 		beta = ((1 - optimal_alpha_gamma)*(ET_VER_SPAN*ET_HOR_SPAN))/ \
 				(optimal_alpha_gamma*BT_VER_SPAN*BT_HOR_SPAN)

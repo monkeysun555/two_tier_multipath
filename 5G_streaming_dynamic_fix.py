@@ -14,7 +14,10 @@ VIDEO_LEN = 300
 VIDEO_FPS = 30
 UPDATE_FREQUENCY = 30
 # BW trace
-REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_5.txt'  
+# REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_5.txt'  
+
+REGULAR_CHANNEL_TRACE = './traces/bandwidth/NEW_MIX_17.txt'  
+
 
 # Don't change following -----------------------------------------------#
 if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':		#
@@ -73,10 +76,14 @@ class Streaming(object):
 		self.buffer_size_el = BUFFER_EL_INIT
 		self.buffer_history = []
 		if not DO_DYNAMIC:
+			# For generating gamma curve
 			# self.target_et_buffer = Q_REF_EL
+
+			# For static test
 			self.target_et_buffer = optimal_buffer_length
 		else:
 			self.target_et_buffer = optimal_buffer_length
+
 		self.upper_et_buffer = self.target_et_buffer + 2
 
 		self.download_partial = 0
