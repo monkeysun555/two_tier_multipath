@@ -85,7 +85,6 @@ class Streaming(object):
 			self.target_et_buffer = optimal_buffer_length
 
 		self.upper_et_buffer = self.target_et_buffer + 2
-
 		self.download_partial = 0
 		self.video_seg_size = 0.0
 
