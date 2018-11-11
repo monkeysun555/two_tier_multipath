@@ -14,7 +14,7 @@ CHUNK_DURATION = 1.0
 ALPHA_DYNAMIC = 1	# <======================= alpha control
 IS_NON_LAYERED = 1  # <======================= whether it is non-layered coding
 IS_SAVING = 0		# for non-dynamic. set to zero
-IS_SAVING_STATIC = 0	# For fov 2, disable all saving
+IS_SAVING_STATIC = 0	# TO save naive 360, FOV only benchmarks, not test on fov 2, disable for FoV 2
 BUFFER_RANGE = 4
 ALPHA_CAL_LEN = 30
 MIN_ALPHA_CAL_LEN = 30
@@ -39,7 +39,8 @@ GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
 				# Only for static using total trace to do optimization
 			   # [0.888, 0.899, 0.923, 0.945],\
 
-			   [1.0, 1.0, 1.0, 1.0]]
+			   # For benchmark hmm traces
+			   [0.883, 0.987, 1.0, 1.0]]
 
 BT_RATES = [10, 30, 50, 80, 120, 160, 200]
 ET_RATES = [300, 350, 400, 450, 500, 550, 600, 650, 700]
@@ -342,7 +343,7 @@ def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate
 			gamma_index = 5
 		else:
 			gamma_index = 6
-			
+		
 		alpha_curve = ALPHA_CURVE[alpha_index]
 		gamma_curve = GAMMA_CURVE[gamma_index]
 
@@ -516,13 +517,11 @@ def cal_accuracy(pred_yaw_value, pred_yaw_quan, pred_pitch_value, pred_pitch_qua
 	return area_accuracy
 
 
-def generate_360_rate():
-	return [100, 250, 400, 550, 700, 850]
+# def generate_360_rate():
+# 	return [100, 250, 400, 550, 700, 850]
 
-def generate_fov_rate():
-	return [100, 250, 400, 550, 700, 850]
-
-
+# def generate_fov_rate():
+# 	return [100, 250, 400, 550, 700, 850]
 
 def quantize_bt_et_rate(ave_bw, bt, et1, et2, et3):
 	if bt < BT_RATES[0] or bt > BT_RATES[-1] or et2 < ET_RATES[0] or et2 > ET_RATES[-1]:
@@ -606,6 +605,8 @@ def show_rates(streaming, video_length, coding_type = 2):
 	# <update> later
 	rate_cut = streaming.rate_cut
 	rebuf = streaming.freezing_time
+
+	# Layered coding
 	if coding_type == 1:
 		for i in range(BUFFER_BL_INIT):
 			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
@@ -645,6 +646,7 @@ def show_rates(streaming, video_length, coding_type = 2):
 			total_alpha += el_accuracy
 			total_gamma += time_eff
 
+	# Non-layered coding
 	elif coding_type == 2:
 		for i in range(BUFFER_BL_INIT):
 			display_bitrate[i] += VP_BT_RATIO * rate_cut[0][0]
