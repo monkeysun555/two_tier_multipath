@@ -22,6 +22,7 @@ GAMMA_CAL_LEN = 10
 BW_THRESHOLD = 0.1
 STD_THRESHOLD = 0.1
 ALPHA_AHEAD = 1.0
+FIX_INIT = 1	# to control initial setting
 
 ALPHA_CURVE = [[0.966, 0.929, 0.882, 0.834],\
 				[0.877, 0.786, 0.707, 0.637]]
@@ -347,7 +348,12 @@ def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate
 		alpha_curve = ALPHA_CURVE[alpha_index]
 		gamma_curve = GAMMA_CURVE[gamma_index]
 
-		rate_cut, optimal_buffer_len = calculate_rate_cute_non_layer(average_bw, alpha_curve, gamma_curve, coding_type)
+		if not FIX_INIT:
+			rate_cut, optimal_buffer_len = calculate_rate_cute_non_layer(average_bw, alpha_curve, gamma_curve, coding_type)
+		else:
+			rate_cut = [BT_RATES[3], ET_RATES[3], ET_RATES[5], ET_RATES[7]]
+			optimal_buffer_len = 1
+
 	return rate_cut, optimal_buffer_len, alpha_index, gamma_index
 
 def generate_video_trace(rate_cut, video_length):

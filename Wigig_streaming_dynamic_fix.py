@@ -41,7 +41,7 @@ CHUNK_DURATION = 1.0
 KP = 0.6		# P controller
 KI = 0.01		# I controller
 PI_RANGE = 10
-DELAY = 0.01		# second
+DELAY = 0.01		# in second
 PI_SMOOTH = 1
 
 # For alpha/gamma
@@ -49,12 +49,12 @@ BUFFER_RANGE = 4
 BW_DALAY_RATIO = 0.95
 
 # FoR MMSys'19 comparison, single tp trace detail info show
-COMPARISON = 1
+COMPARISON = 1					# For JETCAS, disable this value
 if COMPARISON:
 	UPDATE_FREQUENCY = 5
 	REGULAR_CHANNEL_TRACE = './traces/bandwidth/NEW_MIX_17.txt'  
 	VIDEO_LEN = 45
-	DELAY = 0.0
+	DELAY = 0.01	# in second
 
 class Streaming(object):
 	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut, optimal_buffer_length, alpha_idx, gamma_idx):
@@ -521,6 +521,7 @@ def test_all(tp_traces):
 		rewards.append(total_reward)
 
 	print(np.amax(rewards))
+	np.savetxt('cmp_total_rewards.txt', rewards, fmt='%1.2f')
 	return
 	
 if __name__ == '__main__':
