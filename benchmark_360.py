@@ -18,7 +18,7 @@ REGULAR_ADD = 0
 
 # VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_9_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
 
-BUFFER_INIT = 5
+BUFFER_INIT = 10
 Q_REF = 10
 BUFFER_THRESH = 20
 
@@ -149,6 +149,7 @@ class Streaming(object):
 			print("one round end, network time is %s,%s display time is %s and buffer is %s" %(self.network_time,\
 					self.network_ptr, self.display_time, self.buffer_size))
 	def PI_control(self, sniff_bw):
+		current_video_version = -1
 		u_p = KP * (self.buffer_size - Q_REF)
 		u_i = 0
 
@@ -160,18 +161,28 @@ class Streaming(object):
 		v = u + 1
 		delta_time = self.buffer_size
 		R_hat = np.minimum(v, delta_time/CHUNK_DURATION) * sniff_bw
-		if R_hat >= self.rates[5]:
-			current_video_version = 5
-		elif R_hat >= self.rates[4]:
-			current_video_version = 4
-		elif R_hat >= self.rates[3]:
-			current_video_version = 3
-		elif R_hat >= self.rates[2]:
-			current_video_version = 2
-		elif R_hat >= self.rates[1]:
-			current_video_version = 1
-		else:
+
+		if R_hat < self.rates[0]:
 			current_video_version = 0
+		else:
+			for i in reversed(range(len(self.rates))):
+				if R_hat >= self.rates[i]:
+					current_video_version = i
+					break
+			assert not current_video_version == -1
+
+		# if R_hat >= self.rates[5]:
+		# 	current_video_version = 5
+		# elif R_hat >= self.rates[4]:
+		# 	current_video_version = 4
+		# elif R_hat >= self.rates[3]:
+		# 	current_video_version = 3
+		# elif R_hat >= self.rates[2]:
+		# 	current_video_version = 2
+		# elif R_hat >= self.rates[1]:
+		# 	current_video_version = 1
+		# else:
+		# 	current_video_version = 0
 
 		self.video_version = current_video_version
 		self.video_chunk_size = self.rates[current_video_version]

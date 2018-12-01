@@ -3,42 +3,62 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 import utilities as uti
+import pickle 
+
 
 VIDEO_LEN = 450
 VIDEO_FPS = 30
-IS_SAVING = 1
+IS_SAVING = 0
 ALPHA_AHEAD = 0.5
+
+REVISION = 1
+
 def main():
-	mat_contents_1 = sio.loadmat('./traces/output/Video_9_alpha_beta_new.mat')
-	mat_contents_2 = sio.loadmat('./traces/output/Video_13_alpha_beta_new.mat')
-	trace_data_1 = mat_contents_1['data_alpha_beta'] # array of structures
-	trace_data_2 = mat_contents_2['data_alpha_beta'] # array of structures
+
+	if not REVISION:
+		mat_contents_1 = sio.loadmat('./traces/output/Video_9_alpha_beta_new.mat')
+		mat_contents_2 = sio.loadmat('./traces/output/Video_13_alpha_beta_new.mat')
+		trace_data_1 = mat_contents_1['data_alpha_beta'] # array of structures
+		trace_data_2 = mat_contents_2['data_alpha_beta'] # array of structures
 	# pitch_trace_data = mat_contents['view_angle_pitch_combo'] + 90 # array of structures
 	# print(len(yaw_trace_data[0]), len(pitch_trace_data[0]))
 	# print(trace_data.T.shape)
 
-	yaw_trace_data_1 = (trace_data_1.T[1]/math.pi)*180 
-	pitch_trace_data_1 = (trace_data_1.T[2]/math.pi)*180
-	# print(yaw_trace_data.shape, yaw_trace_data[:VIDEO_LEN*VIDEO_FPS])
-	yaw_trace_data_1 =  [x for x in yaw_trace_data_1 if not math.isnan(x)]
-	pitch_trace_data_1 =  [x for x in pitch_trace_data_1 if not math.isnan(x)]
-	# yaw_trace_data.tolist().remove(float('nan'))
+		yaw_trace_data_1 = (trace_data_1.T[1]/math.pi)*180 
+		pitch_trace_data_1 = (trace_data_1.T[2]/math.pi)*180
+		# print(yaw_trace_data.shape, yaw_trace_data[:VIDEO_LEN*VIDEO_FPS])
+		yaw_trace_data_1 =  [x for x in yaw_trace_data_1 if not math.isnan(x)]
+		pitch_trace_data_1 =  [x for x in pitch_trace_data_1 if not math.isnan(x)]
+		# yaw_trace_data.tolist().remove(float('nan'))
 
-	yaw_trace_data_2 = (trace_data_2.T[1]/math.pi)*180
-	pitch_trace_data_2 = (trace_data_2.T[2]/math.pi)*180
-	# print(yaw_trace_data.shape, yaw_trace_data[:VIDEO_LEN*VIDEO_FPS])
-	yaw_trace_data_2 =  [x for x in yaw_trace_data_2 if not math.isnan(x)]
-	pitch_trace_data_2 =  [x for x in pitch_trace_data_2 if not math.isnan(x)]
+		yaw_trace_data_2 = (trace_data_2.T[1]/math.pi)*180
+		pitch_trace_data_2 = (trace_data_2.T[2]/math.pi)*180
+		# print(yaw_trace_data.shape, yaw_trace_data[:VIDEO_LEN*VIDEO_FPS])
+		yaw_trace_data_2 =  [x for x in yaw_trace_data_2 if not math.isnan(x)]
+		pitch_trace_data_2 =  [x for x in pitch_trace_data_2 if not math.isnan(x)]
+	else:
+		contents_1 = pickle.load(open("./traces/output/gt_theta_phi_user1.p", "rb"))
+		contents_2 = pickle.load(open("./traces/output/gt_theta_phi_user7.p", "rb"))
+
+		yaw_trace_data_1 = (contents_1['gt_theta']/math.pi)*180.0
+		pitch_trace_data_1 = (contents_1['gt_phi']/math.pi)*180.0 - 90.0
+		yaw_trace_data_1 =  [x for x in yaw_trace_data_1 if not math.isnan(x)]
+		pitch_trace_data_1 =  [x for x in pitch_trace_data_1 if not math.isnan(x)]
+
+		yaw_trace_data_2 = (contents_2['gt_theta']/math.pi)*180.0
+		pitch_trace_data_2 = (contents_2['gt_phi']/math.pi)*180.0 - 90.0
+		yaw_trace_data_2 =  [x for x in yaw_trace_data_2 if not math.isnan(x)]
+		pitch_trace_data_2 =  [x for x in pitch_trace_data_2 if not math.isnan(x)]
 
 	yaw_trace_data_1 = yaw_trace_data_1[:VIDEO_LEN*VIDEO_FPS]
 	yaw_trace_data_2 = yaw_trace_data_2[:VIDEO_LEN*VIDEO_FPS]
 
 
-	for i in range(len(yaw_trace_data_1)):
-		if yaw_trace_data_1[i] >= 180:
-			yaw_trace_data_1[i] -= 360
-		if yaw_trace_data_1[i] < -180:
-			yaw_trace_data_1[i] += 360
+	# for i in range(len(yaw_trace_data_1)):
+	# 	if yaw_trace_data_1[i] >= 180:
+	# 		yaw_trace_data_1[i] -= 360
+	# 	if yaw_trace_data_1[i] < -180:
+	# 		yaw_trace_data_1[i] += 360
 	# print(yaw_trace_data_1)
 
 	yaw_trace = yaw_trace_data_1
@@ -202,10 +222,14 @@ def main():
 	# k.show()
 	raw_input()
 	if IS_SAVING:
-		h.savefig('./figures/fov/yaw.eps', format='eps', dpi=1000, figsize=(30, 10))
-		i.savefig('./figures/fov/pitch.eps', format='eps', dpi=1000, figsize=(30, 10))
+		if not REVISION:
+			h.savefig('./figures/fov/yaw.eps', format='eps', dpi=1000, figsize=(30, 10))
+			i.savefig('./figures/fov/pitch.eps', format='eps', dpi=1000, figsize=(30, 10))
 		# j.savefig('./figures/fov/fov_2_yaw.eps', format='eps', dpi=1000, figsize=(30, 10))
 		# k.savefig('./figures/fov/fov_2_pitch.eps', format='eps', dpi=1000, figsize=(30, 10))
+		else:
+			h.savefig('./figures/fov/yaw_revision.eps', format='eps', dpi=1000, figsize=(30, 10))
+			i.savefig('./figures/fov/pitch_revision.eps', format='eps', dpi=1000, figsize=(30, 10))
 
 if __name__ == '__main__':
 	main()

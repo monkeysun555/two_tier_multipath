@@ -14,7 +14,8 @@ CHUNK_DURATION = 1.0
 ALPHA_DYNAMIC = 1	# <======================= alpha control
 IS_NON_LAYERED = 1  # <======================= whether it is non-layered coding
 IS_SAVING = 0		# for non-dynamic. set to zero
-IS_SAVING_STATIC = 0	# TO save naive 360, FOV only benchmarks, not test on fov 2, disable for FoV 2
+IS_SAVING_STATIC = 1	# To save naive 360, FOV only benchmarks, not test on fov 2, disable for FoV 2
+REVISION = 1
 BUFFER_RANGE = 4
 ALPHA_CAL_LEN = 30
 MIN_ALPHA_CAL_LEN = 30
@@ -523,11 +524,16 @@ def cal_accuracy(pred_yaw_value, pred_yaw_quan, pred_pitch_value, pred_pitch_qua
 	return area_accuracy
 
 
-# def generate_360_rate():
-# 	return [100, 250, 400, 550, 700, 850]
-
-# def generate_fov_rate():
-# 	return [100, 250, 400, 550, 700, 850]
+def generate_360_rate():
+	# Previous
+	# return [100, 250, 400, 550, 700, 850]
+	# Revision
+	return [100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850]
+def generate_fov_rate():
+	# Previous
+	# return [100, 250, 400, 550, 700, 850]
+	# Revision
+	return [100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850]
 
 def quantize_bt_et_rate(ave_bw, bt, et1, et2, et3):
 	if bt < BT_RATES[0] or bt > BT_RATES[-1] or et2 < ET_RATES[0] or et2 > ET_RATES[-1]:
@@ -1148,7 +1154,10 @@ def show_360_result(streaming, video_length, inti_buffer_length):
 	g.show()
 	raw_input()
 	if IS_SAVING_STATIC:
-		g.savefig('./figures/naive360/naive_'+str(streaming.network_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
+		if not REVISION:
+			g.savefig('./figures/naive360/naive_'+str(streaming.network_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
+		else:
+			g.savefig('./figures/naive360/naive_'+str(streaming.network_file)+'_revision.eps', format='eps', dpi=1000, figsize=(30, 10))
 
 def show_fov_result(streaming, video_length, inti_buffer_length):
 	print("length of record is: %s" % len(streaming.evr_recordset))
@@ -1239,5 +1248,7 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 	g.show()
 	raw_input()
 	if IS_SAVING_STATIC:
-		g.savefig('./figures/predictive/pred_'+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
-
+		if not REVISION:
+			g.savefig('./figures/predictive/pred_'+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
+		else:
+			g.savefig('./figures/predictive/pred_'+str(streaming.network_file)+'_'+str(streaming.fov_file)+'_revision.eps', format='eps', dpi=1000, figsize=(30, 10))
