@@ -6,7 +6,7 @@ import utilities as uti
 import pickle 
 
 
-VIDEO_LEN = 600
+VIDEO_LEN = 450
 VIDEO_FPS = 30
 IS_SAVING = 1
 ALPHA_AHEAD = 0.5
