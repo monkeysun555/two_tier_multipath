@@ -6,12 +6,18 @@ import utilities as uti
 import pickle 
 
 
-VIDEO_LEN = 450
+VIDEO_LEN = 600
 VIDEO_FPS = 30
-IS_SAVING = 0
+IS_SAVING = 1
 ALPHA_AHEAD = 0.5
 
 REVISION = 1
+TSINGHUA_TRACE = 1
+
+USER_1 = 4
+USER_2 = 6
+# For plot yaw, shit by 180; otherwise, the point is changing around -180 and 180. 
+SHIFT = 0	
 
 def main():
 
@@ -37,29 +43,66 @@ def main():
 		yaw_trace_data_2 =  [x for x in yaw_trace_data_2 if not math.isnan(x)]
 		pitch_trace_data_2 =  [x for x in pitch_trace_data_2 if not math.isnan(x)]
 	else:
-		contents_1 = pickle.load(open("./traces/output/gt_theta_phi_user1.p", "rb"))
-		contents_2 = pickle.load(open("./traces/output/gt_theta_phi_user7.p", "rb"))
+		if not TSINGHUA_TRACE:
+			contents_1 = pickle.load(open("./traces/output/gt_theta_phi_user1.p", "rb"))
+			contents_2 = pickle.load(open("./traces/output/gt_theta_phi_user7.p", "rb"))
 
-		yaw_trace_data_1 = (contents_1['gt_theta']/math.pi)*180.0
-		pitch_trace_data_1 = (contents_1['gt_phi']/math.pi)*180.0 - 90.0
-		yaw_trace_data_1 =  [x for x in yaw_trace_data_1 if not math.isnan(x)]
-		pitch_trace_data_1 =  [x for x in pitch_trace_data_1 if not math.isnan(x)]
+			yaw_trace_data_1 = (contents_1['gt_theta']/math.pi)*180.0
+			pitch_trace_data_1 = (contents_1['gt_phi']/math.pi)*180.0 - 90.0
+			yaw_trace_data_1 =  [x for x in yaw_trace_data_1 if not math.isnan(x)]
+			pitch_trace_data_1 =  [x for x in pitch_trace_data_1 if not math.isnan(x)]
 
-		yaw_trace_data_2 = (contents_2['gt_theta']/math.pi)*180.0
-		pitch_trace_data_2 = (contents_2['gt_phi']/math.pi)*180.0 - 90.0
-		yaw_trace_data_2 =  [x for x in yaw_trace_data_2 if not math.isnan(x)]
-		pitch_trace_data_2 =  [x for x in pitch_trace_data_2 if not math.isnan(x)]
+			yaw_trace_data_2 = (contents_2['gt_theta']/math.pi)*180.0
+			pitch_trace_data_2 = (contents_2['gt_phi']/math.pi)*180.0 - 90.0
+			yaw_trace_data_2 =  [x for x in yaw_trace_data_2 if not math.isnan(x)]
+			pitch_trace_data_2 =  [x for x in pitch_trace_data_2 if not math.isnan(x)]
+
+		else:
+			contents_1 = pickle.load(open("./traces/output/gt_theta_phi_vid_3.p", "rb"))[1]
+			contents_2 = pickle.load(open("./traces/output/gt_theta_phi_vid_3.p", "rb"))[2]
+			contents_3 = pickle.load(open("./traces/output/gt_theta_phi_vid_3.p", "rb"))[3]
+
+			yaw_vid_1 = (contents_1['gt_theta']/math.pi)*180.0
+			pitch_vid_1 = (contents_1['gt_phi']/math.pi)*180.0 - 90.0
+
+			yaw_vid_2 = (contents_2['gt_theta']/math.pi)*180.0
+			pitch_vid_2 = (contents_2['gt_phi']/math.pi)*180.0 - 90.0
+
+			yaw_vid_3 = (contents_3['gt_theta']/math.pi)*180.0
+			pitch_vid_3 = (contents_3['gt_phi']/math.pi)*180.0 - 90.0
+
+			# print(len(yaw_vid_1[USER_1]), len(yaw_vid_3[USER_1]))
+			
+			# print(yaw_vid_1[USER_1], len(yaw_vid_1[USER_1]))
+			yaw_trace_data_1 = yaw_vid_1[USER_1].tolist() + yaw_vid_2[USER_1].tolist() + yaw_vid_3[USER_1].tolist()
+			pitch_trace_data_1 = pitch_vid_1[USER_1].tolist() + pitch_vid_2[USER_1].tolist() + pitch_vid_3[USER_1].tolist()
+
+			yaw_trace_data_2 = yaw_vid_1[USER_2].tolist() + yaw_vid_2[USER_2].tolist() + yaw_vid_3[USER_2].tolist()
+			pitch_trace_data_2 = pitch_vid_1[USER_2].tolist() + pitch_vid_2[USER_2].tolist() + pitch_vid_3[USER_2].tolist()
+
+			# print(yaw_trace_data_1, len(yaw_trace_data_1))
+			# print(pitch_trace_data_1, len(pitch_trace_data_1))
 
 	yaw_trace_data_1 = yaw_trace_data_1[:VIDEO_LEN*VIDEO_FPS]
 	yaw_trace_data_2 = yaw_trace_data_2[:VIDEO_LEN*VIDEO_FPS]
 
 
-	# for i in range(len(yaw_trace_data_1)):
-	# 	if yaw_trace_data_1[i] >= 180:
-	# 		yaw_trace_data_1[i] -= 360
-	# 	if yaw_trace_data_1[i] < -180:
-	# 		yaw_trace_data_1[i] += 360
-	# print(yaw_trace_data_1)
+	for i in range(len(yaw_trace_data_1)):
+		if SHIFT: 
+			yaw_trace_data_1[i]  += 180.0
+		if yaw_trace_data_1[i] >= 180:
+			yaw_trace_data_1[i] -= 360
+		if yaw_trace_data_1[i] < -180:
+			yaw_trace_data_1[i] += 360
+
+	for i in range(len(yaw_trace_data_2)):
+		if SHIFT:
+			yaw_trace_data_2[i] += 180.0
+		if yaw_trace_data_2[i] >= 180:
+			yaw_trace_data_2[i] -= 360
+		if yaw_trace_data_2[i] < -180:
+			yaw_trace_data_2[i] += 360
+
 
 	yaw_trace = yaw_trace_data_1
 	pitch_trace = pitch_trace_data_1
@@ -121,12 +164,12 @@ def main():
 	# print(len(np.arange(0,VIDEO_LEN,1.0/float(VIDEO_FPS))))
 	# print(len(yaw_trace[:VIDEO_LEN*VIDEO_FPS]))
 
-	yaw_trace_data_1 = [x + 90 for x in yaw_trace_data_1]
-	for i in range(len(yaw_trace_data_1)):
-		if yaw_trace_data_1[i] >= 180:
-			yaw_trace_data_1[i] -= 360
-		if yaw_trace_data_1[i] < -180:
-			yaw_trace_data_1[i] += 360
+	# yaw_trace_data_1 = [x + 90 for x in yaw_trace_data_1]
+	# for i in range(len(yaw_trace_data_1)):
+	# 	if yaw_trace_data_1[i] >= 180:
+	# 		yaw_trace_data_1[i] -= 360
+	# 	if yaw_trace_data_1[i] < -180:
+	# 		yaw_trace_data_1[i] += 360
 
 	plt.plot(np.arange(0,VIDEO_LEN, 1.0/VIDEO_FPS), [x for x in yaw_trace_data_1[:VIDEO_LEN*VIDEO_FPS]], 'o',\
 		color='cornflowerblue', markeredgecolor='cornflowerblue', markersize = 2.8, label='FoV Trace 1')  #,linewidth=2.5)
