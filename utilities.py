@@ -3,6 +3,8 @@ import numpy as np
 import math
 import scipy.io as sio
 import matplotlib.pyplot as plt
+import pickle
+
 
 # Video info
 VIDEO_LEN = 300
@@ -14,7 +16,7 @@ CHUNK_DURATION = 1.0
 ALPHA_DYNAMIC = 1	# <======================= alpha control
 IS_NON_LAYERED = 1  # <======================= whether it is non-layered coding
 IS_SAVING = 0		# for non-dynamic. set to zero
-IS_SAVING_STATIC = 1	# To save naive 360, FOV only benchmarks, not test on fov 2, disable for FoV 2
+IS_SAVING_STATIC = 1	# To save naive 360, FOV only benchmarks, not test on fov 2, disable for FoV 2, could used for USER 0 but NOT for 6 (revision)
 REVISION = 1
 BUFFER_RANGE = 4
 ALPHA_CAL_LEN = 30
@@ -402,6 +404,29 @@ def load_viewport(vp_trace, video_length):
 	# 		assert yaw_trace_data[i] >= -180:
 	return yaw_trace_data[:video_length*VIDEO_FPS], pitch_trace_data[:video_length*VIDEO_FPS]
 
+def load_pickle_viewport(vp_trace, video_length, user):
+	contents_1 = pickle.load(open(vp_trace, "rb"))[1]
+	contents_2 = pickle.load(open(vp_trace, "rb"))[2]
+	contents_3 = pickle.load(open(vp_trace, "rb"))[3]
+
+	yaw_vid_1 = (contents_1['gt_theta']/math.pi)*180.0
+	pitch_vid_1 = (contents_1['gt_phi']/math.pi)*180.0 - 90.0
+
+	yaw_vid_2 = (contents_2['gt_theta']/math.pi)*180.0
+	pitch_vid_2 = (contents_2['gt_phi']/math.pi)*180.0 - 90.0
+
+	yaw_vid_3 = (contents_3['gt_theta']/math.pi)*180.0
+	pitch_vid_3 = (contents_3['gt_phi']/math.pi)*180.0 - 90.0
+
+	# print(len(yaw_vid_1[USER_1]), len(yaw_vid_3[USER_1]))
+	
+	# print(yaw_vid_1[USER_1], len(yaw_vid_1[USER_1]))
+	yaw_trace_data = yaw_vid_1[user].tolist() + yaw_vid_2[user].tolist() + yaw_vid_3[user].tolist()
+	pitch_trace_data = pitch_vid_1[user].tolist() + pitch_vid_2[user].tolist() + pitch_vid_3[user].tolist()
+
+	return yaw_trace_data[:video_length*VIDEO_FPS], pitch_trace_data[:video_length*VIDEO_FPS]
+
+
 def predict_yaw_trun(yaw_trace, display_time, video_seg_index):
 	yaw_predict_value = 0.0
 	yaw_predict_quan = 0
@@ -529,6 +554,8 @@ def generate_360_rate():
 	# return [100, 250, 400, 550, 700, 850]
 	# Revision
 	return [100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850]
+
+
 def generate_fov_rate():
 	# Previous
 	# return [100, 250, 400, 550, 700, 850]
@@ -1099,8 +1126,8 @@ def show_360_result(streaming, video_length, inti_buffer_length):
 	for i in range(inti_buffer_length):
 		deliver_bitrate[i] += rate[-3]
 		display_bitrate[i] += VP_BT_RATIO * rate[-3]
-		quality[i] += get_quality(VP_BT_RATIO*rate[-1]/VIDEO_FPS, 0.0, 0.0) 
-		new_quality[i] += new_get_quality(VP_BT_RATIO*rate[-1], 0.0, 0.0)
+		quality[i] += get_quality(VP_BT_RATIO*rate[-3]/VIDEO_FPS, 0.0, 0.0) 
+		new_quality[i] += new_get_quality(VP_BT_RATIO*rate[-3], 0.0, 0.0)
 
 	for i in range(len(info)):
 		deliver_bitrate[info[i][0]] += rate[info[i][1]]
@@ -1174,11 +1201,11 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 	black_count = 0
 	# rebuff = 0.0
 	for i in range(inti_buffer_length):
-		deliver_bitrate[i] += rate[-1]
-		display_bitrate[i] += VP_ET_RATIO * rate[-1]
-		quality[i] += get_quality(VP_ET_RATIO*rate[-1], 0.0, 0.0) 
-		new_quality[i] += new_get_quality(VP_ET_RATIO*rate[-1], 0.0, 0.0)
-		q_r[i] += get_quality(VP_ET_RATIO*rate[-1], 0.0, 0.0)
+		deliver_bitrate[i] += rate[-3]
+		display_bitrate[i] += VP_ET_RATIO * rate[-3]
+		quality[i] += get_quality(VP_ET_RATIO*rate[-3], 0.0, 0.0) 
+		new_quality[i] += new_get_quality(VP_ET_RATIO*rate[-3], 0.0, 0.0)
+		q_r[i] += get_quality(VP_ET_RATIO*rate[-3], 0.0, 0.0)
 
 	for i in range(len(info)):
 		black = 0.0
@@ -1225,7 +1252,7 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 	print("Received rate sum: ", sum(deliver_bitrate))
 	print("Average received rate: ", sum(deliver_bitrate)/video_length)	
 	# print(black_record)
-	print("Total freezing time is : %s" % np.sum(freezing_record))
+	print("Total freezing time is : %s, %s%%" % (np.sum(freezing_record), 100.0*np.sum(freezing_record)/video_length))
 	print("Average black ratio is: %s" % (np.sum(black_record)/black_count))
 
 	global FIGURE_NUM

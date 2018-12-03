@@ -8,13 +8,13 @@ import pickle
 
 VIDEO_LEN = 450
 VIDEO_FPS = 30
-IS_SAVING = 1
+IS_SAVING = 0
 ALPHA_AHEAD = 0.5
 
 REVISION = 1
 TSINGHUA_TRACE = 1
 
-USER_1 = 4
+USER_1 = 0
 USER_2 = 6
 # For plot yaw, shit by 180; otherwise, the point is changing around -180 and 180. 
 SHIFT = 0	
