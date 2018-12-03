@@ -14,7 +14,7 @@ newXSamplePoints = linspace(min(x), max(x), lengthX * samplingRateIncrease);
     %%%  Upper_bound = [2 3 4 5]
     %%%  Rate allocation: [158]
     
-alpha_21 = [0.966 0.929 0.882 0.834 ];    %% NOT YET 220.302   385.5   514.038  642.55
+alpha_21 = [0.933 0.878 0.836 0.800 ];    %% NOT YET 220.302   385.5   514.038  642.55
 smoothed_21 = pchip(x, alpha_21, newXSamplePoints);
 
 
@@ -26,7 +26,7 @@ smoothed_21 = pchip(x, alpha_21, newXSamplePoints);
     %%%  Upper_bound = [2 3 4 5]
     %%%  Rate allocation: [552 721 742 841]
 
-alpha_22 = [0.877 0.786 0.707 0.637];   %% 100% average [Rate0 = 197.899930, Rate1 = 346.324878, Rate2 = 461.766503, Rate3 = 577.208129296]
+alpha_22 = [0.857 0.776 0.713 0.671];   %% 100% average [Rate0 = 197.899930, Rate1 = 346.324878, Rate2 = 461.766503, Rate3 = 577.208129296]
 
 smoothed_22 = pchip(x, alpha_22, newXSamplePoints);
 
@@ -60,14 +60,14 @@ set(gca,'xtick',0:1:4,'xticklabel',0:1:4, 'FontSize',22);
 set(gca,'ytick',0.6:0.1:1,'yticklabel',0.6:0.1:1,'FontSize',22);
 axis([1 4 0.6 1])% axis auto equal
 
-xt1 = [1 1.9 2.9 3.6];
+xt1 = [1 1.9 2.9 3.75];
 xt2 = [1 2.0 2.9 3.6];
 % xt3 = [1 1.8 2.8 3.6];
 
 yt1 = alpha_21+0.015;
 yt2 = alpha_22+0.015;
 % yt3 = gamma_23+0.01;
-yt1(4) = yt1(4)+0.02;
+yt1(4) = yt1(4)+0.01;
 yt2(4) = yt2(4)+0.01;
 str1 = {};
 str2 = {};
