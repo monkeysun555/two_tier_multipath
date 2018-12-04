@@ -10,8 +10,8 @@ import utilities as uti
 import comparison
 import cmp_test
 
-DO_DYNAMIC = 0
-CODING_TYPE = 2
+DO_DYNAMIC = 1				# <=========== Switch between stati two tier and fix periodic optimization
+CODING_TYPE = 2				# <=========== For NLC in JETCAS
 VIDEO_LEN = 300
 VIDEO_FPS = 30
 UPDATE_FREQUENCY = 30
@@ -34,7 +34,7 @@ if not REVISION:
 	USER = -1
 else:
 	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'    ##  0 for 1,  6 for 2
-	USER = 0
+	USER = 6				#  <=====================    Change here to control the fov trace for REVISION
 CMP_VP_TRACE_FILENAME = './traces/output/gt_theta_phi.p'
 
 # System parameters
@@ -42,7 +42,7 @@ BUFFER_BL_INIT = 10
 BUFFER_EL_INIT = 1
 Q_REF_BL = 10
 Q_REF_EL = 1
-ET_MAX_PRED = Q_REF_EL + 2
+ET_MAX_PRED = Q_REF_EL + 1
 
 CHUNK_DURATION = 1.0
 #Others
@@ -57,7 +57,7 @@ BUFFER_RANGE = 4
 BW_DALAY_RATIO = 0.95
 
 # FoR MMSys'19 comparison, single tp trace detail info show
-COMPARISON = 1					# For JETCAS, disable this value
+COMPARISON = 0					# For JETCAS, disable this value
 if COMPARISON:
 	UPDATE_FREQUENCY = 5
 	REGULAR_CHANNEL_TRACE = './traces/bandwidth/NEW_MIX_17.txt'  
@@ -478,8 +478,9 @@ def main():
 		average_bw, _ = uti.show_network(network_trace)
 		print("above is real value")
 		# Whether using whole 450s to calculate, if comment, using 450; need to change alpha curve in utilities.py also
+		# Disable for all dynamic two tier simulations
 		####################
-		average_bw, _ = uti.show_network(network_trace[:150])
+		# average_bw, _ = uti.show_network(network_trace[:150])
 		####################
 	else:
 		average_bw, _ = uti.show_network(network_trace)
@@ -494,10 +495,14 @@ def main():
 		yaw_trace, pitch_trace = comparison.cmp_load_viewport(CMP_VP_TRACE_FILENAME, VIDEO_LEN)
 
 	if not COMPARISON:
-		# For JETCAS version, there is control in uti with: FIX_INIT
-		init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)
-
-	# For calculating alpha curve with static buffer
+		# For JETCAS version, there is control in uti with: FIX_INIT, disable it for STATIC; if do dynamic, use fix init
+		if not REVISION:
+			init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)
+		else:
+			init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE, user = USER, do_dynamic = DO_DYNAMIC)
+	
+	# For calculating gamma curve with static buffer
+	# Actually the gamma curve is already calculated, and modeled into curves for different ave, std. Using index 
 	# init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE, False, Q_REF_EL)	
 	
 	else:

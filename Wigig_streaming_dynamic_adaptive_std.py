@@ -8,7 +8,7 @@ import load_5G
 import math
 import utilities as uti
 
-DO_DYNAMIC = 1		# always be 1, static is done on fix 
+DO_DYNAMIC = 1		# always be 1 here, static is done on fix 
 CODING_TYPE = 2
 VIDEO_LEN = 300
 VIDEO_FPS = 30
@@ -21,15 +21,24 @@ if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':
 # DELAY_TRACE = 'delay_1.txt'
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
+
+
 # VP trace
-VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_13_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
+# For JETCAS revision
+REVISION = 1
+if not REVISION:
+	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_13_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
+	USER = -1
+else:
+	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'    ##  0 for 1,  6 for 2
+	USER = 6				#  <=====================    Change here to control the fov trace for REVISION
 
 # System parameters
 BUFFER_BL_INIT = 10
 BUFFER_EL_INIT = 1
 Q_REF_BL = 10
 Q_REF_EL = 1
-ET_MAX_PRED = Q_REF_EL + 2
+ET_MAX_PRED = Q_REF_EL + 1
 
 CHUNK_DURATION = 1.0
 
@@ -478,13 +487,20 @@ def main():
 	if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':		#
 		average_bw, std_bw = uti.show_network(network_trace)
 		print("above is real value")
-		average_bw, std_bw = uti.show_network(network_trace[:150])
+		# average_bw, std_bw = uti.show_network(network_trace[:150])
 	else:
 		average_bw, std_bw = uti.show_network(network_trace)	
 
-	yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN)
+	if not REVISION:
+			yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN)
+	else:
+		yaw_trace, pitch_trace = uti.load_pickle_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN, USER)
 
-	init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)
+	if not REVISION:
+			init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)
+	else:
+		init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE, user = USER, do_dynamic = DO_DYNAMIC)
+	
 	video_trace = uti.generate_video_trace(init_video_rate, VIDEO_LEN)
 
 	streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx, std_bw)

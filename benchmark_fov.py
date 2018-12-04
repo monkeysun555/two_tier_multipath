@@ -23,7 +23,7 @@ if not REVISION:
 	USER = -1
 else:
 	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'		# For revision
-	USER = 0																	# CHange USER to change FOV trace  0 for 1 (index 2 here),  6 for 2 (index 3 here)
+	USER = 6		# <========================= CHange USER to change FOV trace  0 for 1 (index 2 here),  6 for 2 (index 3 here)
 
 
 if VIEWPORT_TRACE_FILENAME_NEW == './traces/output/Video_9_alpha_beta_new.mat':
