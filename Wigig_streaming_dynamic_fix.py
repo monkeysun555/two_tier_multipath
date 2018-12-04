@@ -1,5 +1,5 @@
 # Do dynamic rate allocation at fix frequency
-# 
+# And also for two tier without dynamic allocation
 
 import scipy.io as sio
 import numpy as np
@@ -10,7 +10,7 @@ import utilities as uti
 import comparison
 import cmp_test
 
-DO_DYNAMIC = 1
+DO_DYNAMIC = 0
 CODING_TYPE = 2
 VIDEO_LEN = 300
 VIDEO_FPS = 30
@@ -26,7 +26,15 @@ if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':		#
 REGULAR_MULTIPLE = 1
 REGULAR_ADD = 0
 # VP trace
-VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_13_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
+
+# For JETCAS revision
+REVISION = 1
+if not REVISION:
+	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_13_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
+	USER = -1
+else:
+	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'    ##  0 for 1,  6 for 2
+	USER = 0
 CMP_VP_TRACE_FILENAME = './traces/output/gt_theta_phi.p'
 
 # System parameters
@@ -55,6 +63,7 @@ if COMPARISON:
 	REGULAR_CHANNEL_TRACE = './traces/bandwidth/NEW_MIX_17.txt'  
 	VIDEO_LEN = 45
 	DELAY = 0.01	# in second
+
 
 class Streaming(object):
 	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut, optimal_buffer_length, alpha_idx, gamma_idx):
@@ -476,12 +485,16 @@ def main():
 		average_bw, _ = uti.show_network(network_trace)
 
 	if not COMPARISON:
-		yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN)
+		if not REVISION:
+			yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN)
+		else:
+			yaw_trace, pitch_trace = uti.load_pickle_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN, USER)
+
 	else:
 		yaw_trace, pitch_trace = comparison.cmp_load_viewport(CMP_VP_TRACE_FILENAME, VIDEO_LEN)
 
 	if not COMPARISON:
-		# For JETCAS version
+		# For JETCAS version, there is control in uti with: FIX_INIT
 		init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)
 
 	# For calculating alpha curve with static buffer
@@ -526,3 +539,5 @@ def test_all(tp_traces):
 	
 if __name__ == '__main__':
 	main()
+
+

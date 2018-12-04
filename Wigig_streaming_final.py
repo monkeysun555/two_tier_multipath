@@ -1078,7 +1078,7 @@ def main():
 	# extra_network_cdf, extra_cdf_bins, extra_cdf_patches = plot_cdf(network_trace_aux)
 
 	if not IS_GAMMA:
-		rate_cut = new_rate_determine(network_cdf)	## Final optimum value
+		rate_cut = new_rate_determine(network_cdf)		## Final optimum value
 		# rate_cut = rate_determine(network_cdf)		## Percentile method
 	else:
 		rate_cut = gamma_rate_determine(network_trace)  ## Genrate gamma, very low rate
