@@ -477,9 +477,9 @@ def main():
 	if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':		#
 		average_bw, _ = uti.show_network(network_trace)
 		print("above is real value")
-		# Whether using whole 450s to calculate, if comment, using 450; need to change alpha curve in utilities.py also
+		# Whether using whole 450s to calculate, if comment, using 450; need to change alpha curve in utilities.py also, commnet for static 2
 		# Disable for all dynamic two tier simulations
-		####################
+		#################### For static 1
 		# average_bw, _ = uti.show_network(network_trace[:150])
 		####################
 	else:

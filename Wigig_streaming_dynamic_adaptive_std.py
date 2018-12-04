@@ -31,7 +31,7 @@ if not REVISION:
 	USER = -1
 else:
 	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'    ##  0 for 1,  6 for 2
-	USER = 6				#  <=====================    Change here to control the fov trace for REVISION
+	USER = 0				#  <=====================    Change here to control the fov trace for REVISION
 
 # System parameters
 BUFFER_BL_INIT = 10
