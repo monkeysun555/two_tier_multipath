@@ -7,7 +7,7 @@ import pickle
 
 
 # Video info
-VIDEO_LEN = 300
+# VIDEO_LEN = 300
 CHUNK_DURATION = 1.0
 
 # For alpha/gamma
@@ -20,7 +20,7 @@ IS_SAVING_STATIC = 0	# To save naive 360, FOV only benchmarks, not test on fov 2
 REVISION = 1
 BUFFER_RANGE = 4
 ALPHA_CAL_LEN = 30
-MIN_ALPHA_CAL_LEN = 30
+MIN_ALPHA_CAL_LEN = 10
 GAMMA_CAL_LEN = 10
 BW_THRESHOLD = 0.1
 STD_THRESHOLD = 0.1
@@ -46,23 +46,23 @@ GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
 				# Only for static using 450s total trace to do optimization
 			   [0.888, 0.899, 0.923, 0.945],\
 
-			   # For benchmark hmm traces
-			   [0.883, 0.987, 1.0, 1.0]]
+			   # For LTE trace
+			   [0.837, 0.851, 0.894, 0.902]]
 
-BT_RATES = [10, 30, 50, 80, 120, 160, 200]
-ET_RATES = [300, 350, 400, 450, 500, 550, 600, 650, 700]
+BT_RATES = [0.1, 0.3, 0.5, 0.8, 1.0]
+ET_RATES = [1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 12.0]
 # Rate Allocation
 BITRATE_LEN = 4
 INIT_BL_RATIO = 0.3
 INIT_EL_RATIO = 0.7
-EL_LOWEST_RATIO = 0.8
-EL_HIGHER_RATIO = 1.2
+EL_LOWEST_RATIO = 0.5
+EL_HIGHER_RATIO = 1.5
 BW_UTI_RATIO = 0.85
 BW_DALAY_RATIO = 0.95
 
 # BW prediction
 BW_PRED_SAMPLE_SIZE = 10	# second
-INIT_BW = 500
+INIT_BW = 2.0
 
 # FOV prediction
 VIDEO_FPS = 30
@@ -83,13 +83,13 @@ VP_ET_RATIO = (VP_HOR_SPAN*VP_VER_SPAN)/(ET_HOR_SPAN*ET_VER_SPAN)
 BUFFER_BL_INIT = 10
 BUFFER_EL_INIT = 1
 
-Q_a = 4.91		# This is for each frame, derivation: -1.518 + 1.89 * ln(30) = 4.91
-Q_b = 1.89	
+Q_a = 11.96		# This is for each frame, derivation: 6.33 + 1.655 * ln(30) = 11.444
+Q_b = 1.655	
 Q_c = -2	# CHANGed for REVISION -2
 Q_d = -2	# CHANGed for REVISION -2
 
-Q_a_new = -1.518
-Q_b_new = 1.89
+Q_a_new = 6.33
+Q_b_new = 1.655
 Q_c_new = -2	# CHANGed for REVISION -2
 Q_d_new = -2	# CHANGed for REVISION -2
 # Plot info
@@ -98,9 +98,9 @@ SHOW_FIG = 1
 
 # 1 for layered_coding
 # 2 for non-layered coding
-def rate_optimize(display_time, average_bw, std_bw, alpha_history, version, fov_file, coding_type = 2):
+def rate_optimize(display_time, average_bw, std_bw, alpha_history, version, fov_file, coding_type = 2, user = 0):
 	gamma_curve = update_gamma(average_bw, std_bw)
-	alpha_curve = update_alpha(display_time, alpha_history, fov_file, version)
+	alpha_curve = update_alpha(display_time, alpha_history, fov_file, version, user=user)
 	alpha_gamma = np.multiply(alpha_curve, gamma_curve)
 	optimal_alpha_gamma = np.amax(alpha_gamma)
 	optimal_buffer_len = np.argmax(alpha_gamma)
@@ -231,7 +231,7 @@ def update_gamma(average_bw, std_bw):
 	idx = (np.abs(std_mean_array - current_std_mean_ratio)).argmin()
 	return GAMMA_CURVE[idx]
 
-def update_alpha(display_time, alpha_history, version, fov_file, buffer_range = BUFFER_RANGE):
+def update_alpha(display_time, alpha_history, version, fov_file, buffer_range = BUFFER_RANGE, user = 0):
 	alpha = [0.0]*buffer_range
 	if ALPHA_DYNAMIC:
 		alpha_calculation_len = 0
@@ -273,7 +273,10 @@ def update_alpha(display_time, alpha_history, version, fov_file, buffer_range = 
 				alpha = [0.966, 0.929, 0.882, 0.834]
 			elif fov_file == './traces/output/Video_13_alpha_beta_new.mat':
 				alpha = [0.877, 0.786, 0.707, 0.637]
-
+			elif fov_file == './traces/output/gt_theta_phi_vid_3.p' and user == 0:
+				alpha = [0.933, 0.878, 0.836, 0.800]
+			elif fov_file == './traces/output/gt_theta_phi_vid_3.p' and user == 6:
+				alpha = [0.857, 0.776, 0.713, 0.671]
 	else:
 		alpha = [0.911, 0.870, 0.814, 0.771]
 	
@@ -294,11 +297,11 @@ def get_average_bw(display_time, bw_history, version):
 
 
 def show_network(network_trace):
-	print("5G trace mean:", np.mean(network_trace))
-	print("5G trace standard deviation:", np.std(network_trace))
-	print("5G trace peak:", np.max(network_trace))
-	print("5G trace min:", np.min(network_trace))
-	print("5G trace median:", np.median(network_trace))
+	print("LTE trace mean:", np.mean(network_trace))
+	print("LTE trace standard deviation:", np.std(network_trace))
+	print("LTE trace peak:", np.max(network_trace))
+	print("LTE trace min:", np.min(network_trace))
+	print("LTE trace median:", np.median(network_trace))
 
 	# print("5G delay mean:", np.mean(network_delay))
 	# print("5G delay standard deviation:", np.std(network_delay))
@@ -311,49 +314,36 @@ def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate
 	if not calculate_gamma:
 		rate_cut = [0.0] * BITRATE_LEN
 
-		rate_cut[0] = INIT_BL_RATIO * BW_UTI_RATIO * average_bw
-		rate_cut[1] = INIT_EL_RATIO * EL_LOWEST_RATIO * BW_UTI_RATIO * average_bw
-		rate_cut[2] = INIT_EL_RATIO * BW_UTI_RATIO * average_bw
-		rate_cut[3] = INIT_EL_RATIO * EL_HIGHER_RATIO * BW_UTI_RATIO * average_bw
+		# rate_cut[0] = INIT_BL_RATIO * BW_UTI_RATIO * average_bw
+		# rate_cut[1] = INIT_EL_RATIO * EL_LOWEST_RATIO * BW_UTI_RATIO * average_bw
+		# rate_cut[2] = INIT_EL_RATIO * BW_UTI_RATIO * average_bw
+		# rate_cut[3] = INIT_EL_RATIO * EL_HIGHER_RATIO * BW_UTI_RATIO * average_bw
 
 		# For generating gamma
-		# rate_cut[0] = 120
-		# rate_cut[1] = 350
-		# rate_cut[2] = 450
-		# rate_cut[3] = 550
+		rate_cut[0] = 0.5
+		rate_cut[1] = 2.0
+		rate_cut[2] = 6.0
+		rate_cut[3] = 10.0
 
 		print(rate_cut)
 		optimal_buffer_len = buffer_setting
 		alpha_index = -1
 		gamma_index = -1
+
 	else:
 		alpha_index = 0
 		gamma_index = 0
-		if fov_file == './traces/output/Video_9_alpha_beta_new.mat':
-			alpha_index = 0
-		elif fov_file == './traces/output/Video_13_alpha_beta_new.mat':
-			alpha_index = 1
-		elif fov_file == './traces/output/gt_theta_phi_vid_3.p':
+		if fov_file == './traces/output/gt_theta_phi_vid_3.p':
 			assert user >= 0
 			if user == 0:
 				alpha_index = 2
 			elif user == 6:
 				alpha_index = 3
 
-		if video_file == './traces/bandwidth/BW_Trace_5G_0.txt':
-			gamma_index = 0
-		elif video_file == './traces/bandwidth/BW_Trace_5G_1.txt':
-			gamma_index = 1
-		elif video_file == './traces/bandwidth/BW_Trace_5G_2.txt':
-			gamma_index = 2
-		elif video_file == './traces/bandwidth/BW_Trace_5G_3.txt':
-			gamma_index = 3
-		elif video_file == './traces/bandwidth/BW_Trace_5G_4.txt':
-			gamma_index = 4
-		elif video_file == './traces/bandwidth/BW_Trace_5G_5.txt':
-			gamma_index = 5
-		else:
+		if video_file == './traces/bandwidth/bus_LTE_1.txt':
 			gamma_index = 6
+		else:
+			gamma_index = 7
 		
 		alpha_curve = ALPHA_CURVE[alpha_index]
 		gamma_curve = GAMMA_CURVE[gamma_index]
@@ -362,7 +352,7 @@ def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate
 			rate_cut, optimal_buffer_len = calculate_rate_cute_non_layer(average_bw, alpha_curve, gamma_curve, coding_type)
 		# For dynamic, use fix init
 		else:
-			rate_cut = [BT_RATES[3], ET_RATES[3], ET_RATES[5], ET_RATES[7]]
+			rate_cut = [BT_RATES[2], ET_RATES[0], ET_RATES[2], ET_RATES[4]]
 			optimal_buffer_len = 1
 
 	return rate_cut, optimal_buffer_len, alpha_index, gamma_index
@@ -822,9 +812,9 @@ def show_rates(streaming, video_length, coding_type = 2):
 	plt.tick_params(axis='both', which='major', labelsize=30)
 	plt.tick_params(axis='both', which='minor', labelsize=30)
 	plt.xticks(np.arange(0, video_length+1, 50))
-	plt.yticks(np.arange(200, 1201, 200))
-	plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)	
-	plt.axis([0, video_length, 0, 1200])
+	plt.yticks(np.arange(0, 1.2*ET_RATES[-1], 5))
+	plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)
+	plt.axis([0, video_length, 0, 1.2*ET_RATES[-1]])
 
 	return g
 
@@ -935,9 +925,9 @@ def show_rate_cuts(streaming, video_length):
 	plt.tick_params(axis='both', which='major', labelsize=30)
 	plt.tick_params(axis='both', which='minor', labelsize=30)
 	plt.xticks(np.arange(0, video_length+1, 50))
-	plt.yticks(np.arange(200, 1601, 200))
+	plt.yticks(np.arange(0, ET_RATES[-1]*1.2, 5))
 	plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)	
-	plt.axis([0, video_length, 0, 1000])
+	plt.axis([0, video_length, 0, ET_RATES[-1]*1.2])
 	return a 
 
 

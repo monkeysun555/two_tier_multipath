@@ -4,45 +4,27 @@
 import scipy.io as sio
 import numpy as np
 import matplotlib.pyplot as plt
-import load_5G
+import load_LTE
 import math
-import utilities as uti
-import comparison
-import cmp_test
+import utilities_lte as uti
 
-DO_DYNAMIC = 1				# <=========== Switch between stati two tier and fix periodic optimization
+DO_DYNAMIC = 0				# <=========== Switch between stati two tier and fix periodic optimization
 CODING_TYPE = 2				# <=========== For NLC in JETCAS
-VIDEO_LEN = 300
+VIDEO_LEN = 450
 VIDEO_FPS = 30
 UPDATE_FREQUENCY = 30
 # BW trace
-REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_5.txt'  
-# Don't change following -----------------------------------------------#
-if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':		#
-	VIDEO_LEN = 450														#
-# Don't change following -----------------------------------------------#
-
-# DELAY_TRACE = 'delay_1.txt'
-REGULAR_MULTIPLE = 1
-REGULAR_ADD = 0
-# VP trace
+REGULAR_CHANNEL_TRACE = './traces/bandwidth/bus_LTE_1.txt'  
 
 # For JETCAS revision
-REVISION = 1
-if not REVISION:
-	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_13_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
-	USER = -1
-else:
-	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'    ##  0 for 1,  6 for 2
-	USER = 6				#  <=====================    Change here to control the fov trace for REVISION
-CMP_VP_TRACE_FILENAME = './traces/output/gt_theta_phi.p'
+VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'    ##  0 for 1,  6 for 2
+USER = 0				#  <=====================    Change here to control the fov trace for REVISION
 
 # System parameters
 BUFFER_BL_INIT = 10
 BUFFER_EL_INIT = 1
 Q_REF_BL = 10
-Q_REF_EL = 1
-ET_MAX_PRED = Q_REF_EL + 1
+Q_REF_EL = 1					#<=============Change for calculating gamma curve for a specific bw trace
 
 CHUNK_DURATION = 1.0
 #Others
@@ -56,13 +38,6 @@ PI_SMOOTH = 1
 BUFFER_RANGE = 4
 BW_DALAY_RATIO = 0.95
 
-# FoR MMSys'19 comparison, single tp trace detail info show
-COMPARISON = 0					# For JETCAS, disable this value
-if COMPARISON:
-	UPDATE_FREQUENCY = 5
-	REGULAR_CHANNEL_TRACE = './traces/bandwidth/NEW_MIX_17.txt'  
-	VIDEO_LEN = 45
-	DELAY = 0.01	# in second
 
 
 class Streaming(object):
@@ -136,14 +111,9 @@ class Streaming(object):
 					# print("optimization, current network ptr is: %s, display_time: %s" % (self.network_ptr, self.display_time))
 					self.alpha_history[-1][2] = self.rate_cut_version + 1
 					average_bw, std_bw, average_bw_real = uti.get_average_bw(self.display_time, self.video_bw_history, self.rate_cut_version)
-					if not COMPARISON:
-						new_rate_cut, new_target_et_buffer = uti.rate_optimize(self.display_time, \
-														average_bw, std_bw, self.alpha_history,\
-														VIEWPORT_TRACE_FILENAME_NEW, self.rate_cut_version)
-					else:
-						new_rate_cut, new_target_et_buffer = comparison.cmp_rate_optimize(self.display_time, \
-														average_bw, std_bw, self.alpha_history,\
-														CMP_VP_TRACE_FILENAME, self.rate_cut_version)
+					new_rate_cut, new_target_et_buffer = uti.rate_optimize(self.display_time, \
+													average_bw, std_bw, self.alpha_history,\
+													VIEWPORT_TRACE_FILENAME_NEW, self.rate_cut_version, user=USER)
 					self.rate_cut.append(new_rate_cut)
 					self.rate_cut_version += 1
 					self.rate_cut_time.append(self.display_time)
@@ -337,9 +307,8 @@ class Streaming(object):
 					self.yaw_predict_quan, self.yaw_trace[self.video_seg_index*VIDEO_FPS + VIDEO_FPS/2],\
 					self.pitch_predict_quan, self.pitch_trace[self.video_seg_index*VIDEO_FPS + VIDEO_FPS/2],\
 					temporal_eff, self.rate_cut_version])
-				if not COMPARISON:
-					assert self.video_seg_index_el > self.display_time
-					assert self.video_seg_index_bl > self.display_time
+				assert self.video_seg_index_el > self.display_time
+				assert self.video_seg_index_bl > self.display_time
 
 			else:
 				print("Unknown video version")
@@ -363,8 +332,7 @@ class Streaming(object):
 			self.network_ptr = int(self.network_time)
 			rebuf = np.maximum(duration - self.buffer_size_bl, 0.0)
 			self.display_time += np.minimum(duration, self.buffer_size_bl)
-			if not COMPARISON:
-				assert (round(self.display_time * 100)/100).is_integer()
+			assert (round(self.display_time * 100)/100).is_integer()
 
 			if round(self.video_seg_index_el - new_temp_video_display_time, 3) > round(self.buffer_size_el, 3) and self.buffer_size_el != 0:
 				self.buffer_size_el = np.minimum(self.buffer_size_el, np.maximum(self.video_seg_index_el - self.display_time, 0.0))
@@ -467,48 +435,20 @@ class Streaming(object):
 		return 
 
 def main():
-	# network_trace = loadNetworkTrace(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
-	if not COMPARISON:
-		half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, VIDEO_LEN)
-	else:
-		network_trace = cmp_test.load_single_trace()
+	network_trace = load_LTE.load_lte_data(REGULAR_CHANNEL_TRACE, VIDEO_LEN)
 
-	# network_delay = load_5G.load_5G_latency(DELAY_TRACE)
-	if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':		#
-		average_bw, _ = uti.show_network(network_trace)
-		print("above is real value")
-		# Whether using whole 450s to calculate, if comment, using 450; need to change alpha curve in utilities.py also
-		# Disable for all dynamic two tier simulations
-		####################
-		# average_bw, _ = uti.show_network(network_trace[:150])
-		####################
-	else:
-		average_bw, _ = uti.show_network(network_trace)
+	average_bw, _ = uti.show_network(network_trace)
 
-	if not COMPARISON:
-		if not REVISION:
-			yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN)
-		else:
-			yaw_trace, pitch_trace = uti.load_pickle_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN, USER)
+	yaw_trace, pitch_trace = uti.load_pickle_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN, USER)
 
-	else:
-		yaw_trace, pitch_trace = comparison.cmp_load_viewport(CMP_VP_TRACE_FILENAME, VIDEO_LEN)
-
-	if not COMPARISON:
-		# For JETCAS version, there is control in uti with: FIX_INIT, disable it for STATIC; if do dynamic, use fix init
-		if not REVISION:
-			init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)
-		else:
-			init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE, user = USER, do_dynamic = DO_DYNAMIC)
 	
-	# For calculating gamma curve with static buffer
-	# Actually the gamma curve is already calculated, and modeled into curves for different ave, std. Using index 
+	# For JETCAS version, there is control in uti with: FIX_INIT, disable it for STATIC; if do dynamic, use fix init
+	init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE, user = USER, do_dynamic = DO_DYNAMIC)
+	
+	# For calculating gamma curve with static buffer,
+	# If the gamma curve is already calculated(modeled into curves for different ave, std. Using index )
 	# init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE, False, Q_REF_EL)	
 	
-	else:
-		# For MMSys19 comparison
-		init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = comparison.cmp_load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, CMP_VP_TRACE_FILENAME, CODING_TYPE)
-
 
 	video_trace = uti.generate_video_trace(init_video_rate, VIDEO_LEN)
 
@@ -519,28 +459,7 @@ def main():
 	uti.show_result(streaming_sim, VIDEO_LEN, CODING_TYPE)
 
 
-def test_all(tp_traces):
 
-	yaw_trace, pitch_trace = comparison.cmp_load_viewport(CMP_VP_TRACE_FILENAME, VIDEO_LEN)
-	rewards = []
-	for i in range(len(tp_traces)):
-		network_trace = tp_traces[i]
-		print(len(network_trace))
-		average_bw = np.mean(network_trace)
-
-		init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = comparison.cmp_load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, CMP_VP_TRACE_FILENAME, CODING_TYPE)
-		video_trace = uti.generate_video_trace(init_video_rate, VIDEO_LEN)
-
-		streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx)
-			
-		streaming_sim.run()
-
-		total_reward = comparison.cmp_show_result(streaming_sim, VIDEO_LEN, CODING_TYPE)
-		rewards.append(total_reward)
-
-	print(np.amax(rewards))
-	np.savetxt('cmp_total_rewards.txt', rewards, fmt='%1.2f')
-	return
 	
 if __name__ == '__main__':
 	main()
