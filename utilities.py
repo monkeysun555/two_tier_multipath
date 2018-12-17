@@ -49,7 +49,7 @@ GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
 			   # For benchmark hmm traces
 			   [0.883, 0.987, 1.0, 1.0]]
 
-BT_RATES = [10, 30, 50, 80, 120, 160, 200]
+BT_RATES = [10, 30, 50, 80, 120, 160, 200, 250]
 ET_RATES = [300, 350, 400, 450, 500, 550, 600, 650, 700]
 # Rate Allocation
 BITRATE_LEN = 4

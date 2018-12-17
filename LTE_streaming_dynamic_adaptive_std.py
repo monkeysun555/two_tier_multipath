@@ -8,7 +8,7 @@ import load_5G
 import math
 import utilities as uti
 
-DO_DYNAMIC = 1		# always be 1 here, static is done on fix 
+DO_DYNAMIC = 0		# always be 1 here, static is done on fix 
 CODING_TYPE = 2
 VIDEO_LEN = 300
 VIDEO_FPS = 30
@@ -481,16 +481,11 @@ class Streaming(object):
 
 
 def main():
-	# network_trace = loadNetworkTrace(REGULAR_CHANNEL_TRACE, REGULAR_MULTIPLE, REGULAR_ADD)
 	half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, VIDEO_LEN, REGULAR_MULTIPLE, REGULAR_ADD)
-	# network_delay = load_5G.load_5G_latency(DELAY_TRACE)
-	if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':		#
-		average_bw, std_bw = uti.show_network(network_trace)
-		print("above is real value")
-		# average_bw, std_bw = uti.show_network(network_trace[:150])
-	else:
-		average_bw, std_bw = uti.show_network(network_trace)	
-
+	average_bw, std_bw = uti.show_network(network_trace)
+	print("above is real value")
+	# average_bw, std_bw = uti.show_network(network_trace[:150])
+	
 	if not REVISION:
 			yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN)
 	else:

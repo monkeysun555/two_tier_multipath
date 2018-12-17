@@ -33,21 +33,10 @@ ALPHA_CURVE = [[0.966, 0.929, 0.882, 0.834],\
 				[0.933, 0.878, 0.836, 0.800],\
 				[0.857, 0.776, 0.713, 0.671]]
 
-GAMMA_CURVE = [[0.95, 1.0, 1.0, 1.0],\
-			   [0.92, 0.987, 1.0, 1.0],\
-			   [0.90, 0.942, 0.978, 1.0],\
-			   [0.88, 0.913, 0.970, 1.0],\
-			   [0.85, 0.88, 0.90, 0.92],\
-
-				# Only for static using 150s (first phase), and all other dynamic
-			   # [0.823, 0.942, 0.978, 1.0],\
-
-
-				# Only for static using 450s total trace to do optimization
-			   [0.888, 0.899, 0.923, 0.945],\
-
-			   # For LTE trace
-			   [0.837, 0.851, 0.894, 0.902]]
+GAMMA_CURVE = [[0.99, 1.0, 1.0, 1.0],\
+			   [0.88, 0.895, 0.92, 0.93],\
+			   [0.793, 0.824, 0.857, 0.889],\
+			   [0.699, 0.728, 0.763, 0.794]]
 
 BT_RATES = [0.1, 0.3, 0.5, 0.8]
 ET_RATES = [1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 12.0]
@@ -55,8 +44,8 @@ ET_RATES = [1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 12.0]
 BITRATE_LEN = 4
 INIT_BL_RATIO = 0.3
 INIT_EL_RATIO = 0.7	
-EL_LOWEST_RATIO = 0.5		# Change for LTE
-EL_HIGHER_RATIO = 1.5		# Change for LTE
+EL_LOWEST_RATIO = 0.8		# Change for LTE
+EL_HIGHER_RATIO = 1.2		# Change for LTE
 BW_UTI_RATIO = 0.85
 BW_DALAY_RATIO = 0.95
 
@@ -70,12 +59,12 @@ VIEW_PRED_SAMPLE_LEN = 30
 FRAME_MV_LIMIT = 180.0
 POLY_ORDER = 1
 
-ET_HOR_SPAN = 150.0
-ET_VER_SPAN = 150.0
+ET_HOR_SPAN = 135.0
+ET_VER_SPAN = 135.0
 BT_HOR_SPAN = 360.0
 BT_VER_SPAN = 180.0
-VP_HOR_SPAN = 120.0
-VP_VER_SPAN = 120.0
+VP_HOR_SPAN = 105.0
+VP_VER_SPAN = 105.0
 VP_BT_RATIO = (VP_HOR_SPAN*VP_VER_SPAN)/(BT_HOR_SPAN*BT_VER_SPAN)
 VP_ET_RATIO = (VP_HOR_SPAN*VP_VER_SPAN)/(ET_HOR_SPAN*ET_VER_SPAN)
 
@@ -314,16 +303,16 @@ def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate
 	if not calculate_gamma:
 		rate_cut = [0.0] * BITRATE_LEN
 
-		# rate_cut[0] = INIT_BL_RATIO * BW_UTI_RATIO * average_bw
-		# rate_cut[1] = INIT_EL_RATIO * EL_LOWEST_RATIO * BW_UTI_RATIO * average_bw
-		# rate_cut[2] = INIT_EL_RATIO * BW_UTI_RATIO * average_bw
-		# rate_cut[3] = INIT_EL_RATIO * EL_HIGHER_RATIO * BW_UTI_RATIO * average_bw
+		rate_cut[0] = INIT_BL_RATIO * BW_UTI_RATIO * average_bw
+		rate_cut[1] = INIT_EL_RATIO * EL_LOWEST_RATIO * BW_UTI_RATIO * average_bw
+		rate_cut[2] = INIT_EL_RATIO * BW_UTI_RATIO * average_bw
+		rate_cut[3] = INIT_EL_RATIO * EL_HIGHER_RATIO * BW_UTI_RATIO * average_bw
 
 		# For generating gamma
-		rate_cut[0] = 0.5
-		rate_cut[1] = 2.0
-		rate_cut[2] = 6.0
-		rate_cut[3] = 10.0
+		# rate_cut[0] = 0.5
+		# rate_cut[1] = 2.0
+		# rate_cut[2] = 6.0
+		# rate_cut[3] = 10.0
 
 		print(rate_cut)
 		optimal_buffer_len = buffer_setting

@@ -8,23 +8,23 @@ import load_LTE
 import math
 import utilities_lte as uti
 
-DO_DYNAMIC = 1				# <=========== Switch between stati two tier and fix periodic optimization
+DO_DYNAMIC = 0				# <=========== Switch between stati two tier and fix periodic optimization
 CODING_TYPE = 2				# <=========== For NLC in JETCAS
 VIDEO_LEN = 450
 VIDEO_FPS = 30
 UPDATE_FREQUENCY = 30
 # BW trace
-REGULAR_CHANNEL_TRACE = './traces/bandwidth/bus_LTE_1.txt'  
+REGULAR_CHANNEL_TRACE = './traces/bandwidth/bus_LTE_5.txt'  
 
 # For JETCAS revision
-VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'    ##  0 for 1,  6 for 2
-USER = 0				#  <=====================    Change here to control the fov trace for REVISION
+VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'    
+USER = 0				#  <=====================    Change here to control the fov trace for REVISION,  0 for 1,  6 for 2
 
 # System parameters
 BUFFER_BL_INIT = 10
 BUFFER_EL_INIT = 1
 Q_REF_BL = 10
-Q_REF_EL = 1					#<=============Change for calculating gamma curve for a specific bw trace
+Q_REF_EL = 3				#<=============Change for calculating gamma curve for a specific bw trace
 
 CHUNK_DURATION = 1.0
 #Others
@@ -443,11 +443,11 @@ def main():
 
 	
 	# For JETCAS version, there is control in uti with: FIX_INIT, disable it for STATIC; if do dynamic, use fix init
-	init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE, user = USER, do_dynamic = DO_DYNAMIC)
+	# init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE, user = USER, do_dynamic = DO_DYNAMIC)
 	
 	# For calculating gamma curve with static buffer,
 	# If the gamma curve is already calculated(modeled into curves for different ave, std. Using index )
-	# init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE, False, Q_REF_EL)	
+	init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE, False, Q_REF_EL)	
 	
 
 	video_trace = uti.generate_video_trace(init_video_rate, VIDEO_LEN)

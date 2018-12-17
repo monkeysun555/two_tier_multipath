@@ -4,7 +4,7 @@ import utilities_lte as uti
 import matplotlib.pyplot as plt
 
 
-FILE_LIST = ['./traces/bandwidth/bus_LTE_1.txt']
+FILE_LIST = ['./traces/bandwidth/bus_LTE_4.txt']
 VIDEO_LENGTH = 450
 
 
@@ -15,7 +15,7 @@ def load_lte_data(fname, video_length, addition_length = 0):
 	# you may also want to remove whitespace characters like `\n` at the end of each line
 	# content = content[0].split('\r')
 	content = [float(x.strip('\n')) for x in content]
-	return content
+	return content[:video_length]
 
 def main(fnames):
 	for fname in fnames:
@@ -33,7 +33,7 @@ def main(fnames):
 	plt.tick_params(axis='both', which='major', labelsize=30)
 	plt.tick_params(axis='both', which='minor', labelsize=30)
 	plt.axis([0, len(network_trace), 0, max(network_trace)*1.2])
-	plt.xticks(np.arange(0, len(network_trace)+1, 50))
+	plt.xticks(np.arange(0, len(network_trace)+1, 500))
 	plt.yticks(np.arange(0, max(network_trace)*1.2, 5))
 	plt.gcf().subplots_adjust(bottom=0.20, left=0.085,right=0.97)	
 	plt.grid(linestyle='dashed', axis='y',linewidth=1.5, color='gray')
