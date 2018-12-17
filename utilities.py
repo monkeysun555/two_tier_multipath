@@ -40,11 +40,11 @@ GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
 			   [0.669, 0.797, 0.862, 0.893],\
 
 				# Only for static using 150s (first phase), and all other dynamic
-			   # [0.823, 0.942, 0.978, 1.0],\
+			   [0.823, 0.942, 0.978, 1.0],\
 
 
 				# Only for static using 450s total trace to do optimization
-			   [0.888, 0.899, 0.923, 0.945],\
+			   # [0.888, 0.899, 0.923, 0.945],\
 
 			   # For benchmark hmm traces
 			   [0.883, 0.987, 1.0, 1.0]]
@@ -417,20 +417,25 @@ def load_pickle_viewport(vp_trace, video_length, user):
 	contents_2 = pickle.load(open(vp_trace, "rb"))[2]
 	contents_3 = pickle.load(open(vp_trace, "rb"))[3]
 
-	yaw_vid_1 = (contents_1['gt_theta']/math.pi)*180.0
-	pitch_vid_1 = (contents_1['gt_phi']/math.pi)*180.0 - 90.0
+	yaw_vid_1 = (contents_1['gt_theta']/math.pi)*180.0 + 180.0
+	pitch_vid_1 = (contents_1['gt_phi']/math.pi)*180.0
 
-	yaw_vid_2 = (contents_2['gt_theta']/math.pi)*180.0
-	pitch_vid_2 = (contents_2['gt_phi']/math.pi)*180.0 - 90.0
+	yaw_vid_2 = (contents_2['gt_theta']/math.pi)*180.0 + 180.0
+	pitch_vid_2 = (contents_2['gt_phi']/math.pi)*180.0
 
-	yaw_vid_3 = (contents_3['gt_theta']/math.pi)*180.0
-	pitch_vid_3 = (contents_3['gt_phi']/math.pi)*180.0 - 90.0
-
-	# print(len(yaw_vid_1[USER_1]), len(yaw_vid_3[USER_1]))
+	yaw_vid_3 = (contents_3['gt_theta']/math.pi)*180.0 + 180.0
+	pitch_vid_3 = (contents_3['gt_phi']/math.pi)*180.0
 	
 	# print(yaw_vid_1[USER_1], len(yaw_vid_1[USER_1]))
 	yaw_trace_data = yaw_vid_1[user].tolist() + yaw_vid_2[user].tolist() + yaw_vid_3[user].tolist()
 	pitch_trace_data = pitch_vid_1[user].tolist() + pitch_vid_2[user].tolist() + pitch_vid_3[user].tolist()
+
+	for i in range(VIDEO_FPS*video_length):
+		yaw_trace_data[i] = yaw_trace_data[i]%360.0
+		assert yaw_trace_data[i] >= 0.0
+		assert yaw_trace_data[i] < 360.0
+		assert pitch_trace_data[i] >= 0.0
+		assert pitch_trace_data[i] < 180.0
 
 	return yaw_trace_data[:video_length*VIDEO_FPS], pitch_trace_data[:video_length*VIDEO_FPS]
 
@@ -1154,10 +1159,10 @@ def show_360_result(streaming, video_length, inti_buffer_length):
 	rate = streaming.rates
 	rebuff = 0.0
 	for i in range(inti_buffer_length):
-		deliver_bitrate[i] += rate[-3]
-		display_bitrate[i] += VP_BT_RATIO * rate[-3]
-		quality[i] += get_quality(VP_BT_RATIO*rate[-3]/VIDEO_FPS, 0.0, 0.0) 
-		new_quality[i] += new_get_quality(VP_BT_RATIO*rate[-3], 0.0, 0.0)
+		deliver_bitrate[i] += rate[0]
+		display_bitrate[i] += VP_BT_RATIO * rate[0]
+		quality[i] += get_quality(VP_BT_RATIO*rate[0]/VIDEO_FPS, 0.0, 0.0) 
+		new_quality[i] += new_get_quality(VP_BT_RATIO*rate[0], 0.0, 0.0)
 
 	for i in range(len(info)):
 		deliver_bitrate[info[i][0]] += rate[info[i][1]]

@@ -18,7 +18,7 @@ REGULAR_ADD = 0
 
 # VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_9_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
 
-BUFFER_INIT = 10
+BUFFER_INIT = 3
 Q_REF = 10
 BUFFER_THRESH = 15
 

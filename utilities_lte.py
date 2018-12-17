@@ -20,7 +20,7 @@ IS_SAVING_STATIC = 0	# To save naive 360, FOV only benchmarks, not test on fov 2
 REVISION = 1
 BUFFER_RANGE = 4
 ALPHA_CAL_LEN = 30
-MIN_ALPHA_CAL_LEN = 10
+MIN_ALPHA_CAL_LEN = 30
 GAMMA_CAL_LEN = 10
 BW_THRESHOLD = 0.1
 STD_THRESHOLD = 0.1
@@ -33,11 +33,11 @@ ALPHA_CURVE = [[0.966, 0.929, 0.882, 0.834],\
 				[0.933, 0.878, 0.836, 0.800],\
 				[0.857, 0.776, 0.713, 0.671]]
 
-GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
-			   [0.883, 0.987, 1.0, 1.0],\
-			   [0.823, 0.942, 0.978, 1.0],\
-			   [0.780, 0.913, 0.970, 1.0],\
-			   [0.669, 0.797, 0.862, 0.893],\
+GAMMA_CURVE = [[0.95, 1.0, 1.0, 1.0],\
+			   [0.92, 0.987, 1.0, 1.0],\
+			   [0.90, 0.942, 0.978, 1.0],\
+			   [0.88, 0.913, 0.970, 1.0],\
+			   [0.85, 0.88, 0.90, 0.92],\
 
 				# Only for static using 150s (first phase), and all other dynamic
 			   # [0.823, 0.942, 0.978, 1.0],\
@@ -49,14 +49,14 @@ GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
 			   # For LTE trace
 			   [0.837, 0.851, 0.894, 0.902]]
 
-BT_RATES = [0.1, 0.3, 0.5, 0.8, 1.0]
-ET_RATES = [1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 12.0]
+BT_RATES = [0.1, 0.3, 0.5, 0.8]
+ET_RATES = [1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 12.0]
 # Rate Allocation
 BITRATE_LEN = 4
 INIT_BL_RATIO = 0.3
-INIT_EL_RATIO = 0.7
-EL_LOWEST_RATIO = 0.5
-EL_HIGHER_RATIO = 1.5
+INIT_EL_RATIO = 0.7	
+EL_LOWEST_RATIO = 0.5		# Change for LTE
+EL_HIGHER_RATIO = 1.5		# Change for LTE
 BW_UTI_RATIO = 0.85
 BW_DALAY_RATIO = 0.95
 
@@ -408,13 +408,13 @@ def load_pickle_viewport(vp_trace, video_length, user):
 	contents_3 = pickle.load(open(vp_trace, "rb"))[3]
 
 	yaw_vid_1 = (contents_1['gt_theta']/math.pi)*180.0
-	pitch_vid_1 = (contents_1['gt_phi']/math.pi)*180.0 - 90.0
+	pitch_vid_1 = (contents_1['gt_phi']/math.pi)*180.0
 
 	yaw_vid_2 = (contents_2['gt_theta']/math.pi)*180.0
-	pitch_vid_2 = (contents_2['gt_phi']/math.pi)*180.0 - 90.0
+	pitch_vid_2 = (contents_2['gt_phi']/math.pi)*180.0
 
 	yaw_vid_3 = (contents_3['gt_theta']/math.pi)*180.0
-	pitch_vid_3 = (contents_3['gt_phi']/math.pi)*180.0 - 90.0
+	pitch_vid_3 = (contents_3['gt_phi']/math.pi)*180.0
 
 	# print(len(yaw_vid_1[USER_1]), len(yaw_vid_3[USER_1]))
 	

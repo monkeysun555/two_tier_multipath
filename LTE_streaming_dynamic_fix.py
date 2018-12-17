@@ -8,7 +8,7 @@ import load_LTE
 import math
 import utilities_lte as uti
 
-DO_DYNAMIC = 0				# <=========== Switch between stati two tier and fix periodic optimization
+DO_DYNAMIC = 1				# <=========== Switch between stati two tier and fix periodic optimization
 CODING_TYPE = 2				# <=========== For NLC in JETCAS
 VIDEO_LEN = 450
 VIDEO_FPS = 30
