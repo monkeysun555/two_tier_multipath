@@ -83,13 +83,13 @@ VP_ET_RATIO = (VP_HOR_SPAN*VP_VER_SPAN)/(ET_HOR_SPAN*ET_VER_SPAN)
 BUFFER_BL_INIT = 10
 BUFFER_EL_INIT = 1
 
-Q_a = 4.91		# This is for each frame, derivation: -1.518 + 1.89 * ln(30) = 4.91
-Q_b = 1.89	
+Q_a = 4.99		# This is for each frame, derivation: -0.858 + 1.72 * ln(30) = 4.99
+Q_b = 1.72	
 Q_c = -4	# CHANGed for REVISION -4
 Q_d = -4	# CHANGed for REVISION -4
 
-Q_a_new = -1.518
-Q_b_new = 1.89
+Q_a_new = -0.858
+Q_b_new = 1.72
 Q_c_new = -4	# CHANGed for REVISION -4
 Q_d_new = -4	# CHANGed for REVISION -4
 # Plot info

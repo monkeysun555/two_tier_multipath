@@ -16,7 +16,7 @@ CHUNK_DURATION = 1.0
 ALPHA_DYNAMIC = 1	# <======================= alpha control
 IS_NON_LAYERED = 1  # <======================= whether it is non-layered coding
 IS_SAVING = 0		# for non-dynamic. set to zero
-IS_SAVING_STATIC = 1	# To save naive 360, FOV only benchmarks, not test on fov 2, disable for FoV 2, could used for USER 0 but NOT for 6 (revision)
+IS_SAVING_STATIC = 0	# To save naive 360, FOV only benchmarks, not test on fov 2, disable for FoV 2, could used for USER 0 but NOT for 6 (revision)
 REVISION = 1
 BUFFER_RANGE = 4
 ALPHA_CAL_LEN = 30
@@ -333,9 +333,9 @@ def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate
 				alpha_index = 3
 
 		if video_file == './traces/bandwidth/bus_test_1.txt':
-			gamma_index = 4
+			gamma_index = 0
 		else:
-			gamma_index = 5
+			gamma_index = 1
 		
 		alpha_curve = ALPHA_CURVE[alpha_index]
 		gamma_curve = GAMMA_CURVE[gamma_index]
@@ -805,7 +805,7 @@ def show_rates(streaming, video_length, coding_type = 2):
 	plt.tick_params(axis='both', which='major', labelsize=30)
 	plt.tick_params(axis='both', which='minor', labelsize=30)
 	plt.xticks(np.arange(0, video_length+1, 50))
-	plt.yticks(np.arange(0, 1.2*ET_RATES[-1], 5))
+	plt.yticks(np.arange(5, 1.1*ET_RATES[-1], 5))
 	plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)
 	plt.axis([0, video_length, 0, 1.2*ET_RATES[-1]])
 
@@ -918,9 +918,9 @@ def show_rate_cuts(streaming, video_length):
 	plt.tick_params(axis='both', which='major', labelsize=30)
 	plt.tick_params(axis='both', which='minor', labelsize=30)
 	plt.xticks(np.arange(0, video_length+1, 50))
-	plt.yticks(np.arange(0, ET_RATES[-1]*1.2, 5))
+	plt.yticks(np.arange(5, ET_RATES[-1]*1.1, 5))
 	plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)	
-	plt.axis([0, video_length, 0, ET_RATES[-1]*1.2])
+	plt.axis([0, video_length, 0, ET_RATES[-1]*1.1])
 	return a 
 
 
@@ -957,46 +957,25 @@ def show_result(streaming, video_length, coding_type):
 		show_figure(figures)
 
 	if IS_SAVING:
-		if not REVISION:
-			if streaming.dynamic == 1:
-				if streaming.dy_type == 'fix':
-					for fig in figures:
-						fig[0].savefig('./figures/fix/fix'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
-				
-				elif streaming.dy_type == 'adaptive':
-					for fig in figures:
-						fig[0].savefig('./figures/adaptive/adaptive'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
-				
-				elif streaming.dy_type == 'std_adaptive':
-					for fig in figures:
-						fig[0].savefig('./figures/std_adaptive/std_adaptive'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
-				
-			else:
-				if streaming.dy_type == 'fix':
-					for fig in figures:
-						fig[0].savefig('./figures/static/static'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
-				elif streaming.dy_type == 'adaptive':
-					print("adaptive is not for static")
+		if streaming.dynamic == 1:
+			if streaming.dy_type == 'fix':
+				for fig in figures:
+					fig[0].savefig('./figures/lte/fix/fix'+fig[1]+'_'+str(streaming.network_file)+'_'+str(streaming.fov_file)+'_lte.eps', format='eps', dpi=1000, figsize=(30, 10))
+			
+			elif streaming.dy_type == 'adaptive':
+				for fig in figures:
+					fig[0].savefig('./figures/lte/adaptive/adaptive'+fig[1]+'_'+str(streaming.network_file)+'_'+str(streaming.fov_file)+'_lte.eps', format='eps', dpi=1000, figsize=(30, 10))
+			
+			elif streaming.dy_type == 'std_adaptive':
+				for fig in figures:
+					fig[0].savefig('./figures/lte/std_adaptive/std_adaptive'+fig[1]+'_'+str(streaming.network_file)+'_'+str(streaming.fov_file)+'_lte.eps', format='eps', dpi=1000, figsize=(30, 10))
+			
 		else:
-			if streaming.dynamic == 1:
-				if streaming.dy_type == 'fix':
-					for fig in figures:
-						fig[0].savefig('./figures/fix/fix'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'_revision.eps', format='eps', dpi=1000, figsize=(30, 10))
-				
-				elif streaming.dy_type == 'adaptive':
-					for fig in figures:
-						fig[0].savefig('./figures/adaptive/adaptive'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'_revision.eps', format='eps', dpi=1000, figsize=(30, 10))
-				
-				elif streaming.dy_type == 'std_adaptive':
-					for fig in figures:
-						fig[0].savefig('./figures/std_adaptive/std_adaptive'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'_revision.eps', format='eps', dpi=1000, figsize=(30, 10))
-				
-			else:
-				if streaming.dy_type == 'fix':
-					for fig in figures:
-						fig[0].savefig('./figures/static/static'+fig[1]+str(streaming.network_file)+'_'+str(streaming.fov_file)+'_revision.eps', format='eps', dpi=1000, figsize=(30, 10))
-				elif streaming.dy_type == 'adaptive':
-					print("adaptive is not for static")
+			if streaming.dy_type == 'fix':
+				for fig in figures:
+					fig[0].savefig('./figures/lte/static/static'+fig[1]+'_'+str(streaming.network_file)+'_'+str(streaming.fov_file)+'_lte.eps', format='eps', dpi=1000, figsize=(30, 10))
+			elif streaming.dy_type == 'adaptive':
+				print("adaptive is not for static")
 
 	return
 
