@@ -71,7 +71,7 @@ def main():
 			yaw_vid_3 = (contents_3['gt_theta']/math.pi)*180.0
 			pitch_vid_3 = (contents_3['gt_phi']/math.pi)*180.0 - 90.0
 
-			# print(len(yaw_vid_1[USER_1]), len(yaw_vid_3[USER_1]))
+			print(len(yaw_vid_1[USER_1]), len(yaw_vid_2[USER_1]))
 			
 			# print(yaw_vid_1[USER_1], len(yaw_vid_1[USER_1]))
 			yaw_trace_data_1 = yaw_vid_1[USER_1].tolist() + yaw_vid_2[USER_1].tolist() + yaw_vid_3[USER_1].tolist()
