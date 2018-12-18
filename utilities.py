@@ -40,11 +40,11 @@ GAMMA_CURVE = [[0.956, 1.0, 1.0, 1.0],\
 			   [0.669, 0.797, 0.862, 0.893],\
 
 				# Only for static using 150s (first phase), and all other dynamic
-			   [0.823, 0.942, 0.978, 1.0],\
+			   # [0.823, 0.942, 0.978, 1.0],\
 
 
 				# Only for static using 450s total trace to do optimization
-			   # [0.888, 0.899, 0.923, 0.945],\
+			   [0.888, 0.899, 0.923, 0.945],\
 
 			   # For benchmark hmm traces
 			   [0.883, 0.987, 1.0, 1.0]]
