@@ -70,12 +70,12 @@ VIEW_PRED_SAMPLE_LEN = 30
 FRAME_MV_LIMIT = 180.0
 POLY_ORDER = 1
 
-ET_HOR_SPAN = 150.0
-ET_VER_SPAN = 150.0
+ET_HOR_SPAN = 135.0
+ET_VER_SPAN = 135.0
 BT_HOR_SPAN = 360.0
 BT_VER_SPAN = 180.0
-VP_HOR_SPAN = 120.0
-VP_VER_SPAN = 120.0
+VP_HOR_SPAN = 105.0
+VP_VER_SPAN = 105.0
 VP_BT_RATIO = (VP_HOR_SPAN*VP_VER_SPAN)/(BT_HOR_SPAN*BT_VER_SPAN)
 VP_ET_RATIO = (VP_HOR_SPAN*VP_VER_SPAN)/(ET_HOR_SPAN*ET_VER_SPAN)
 
@@ -85,13 +85,13 @@ BUFFER_EL_INIT = 1
 
 Q_a = 4.91		# This is for each frame, derivation: -1.518 + 1.89 * ln(30) = 4.91
 Q_b = 1.89	
-Q_c = -2	# CHANGed for REVISION -2
-Q_d = -2	# CHANGed for REVISION -2
+Q_c = -4	# CHANGed for REVISION -4
+Q_d = -4	# CHANGed for REVISION -4
 
 Q_a_new = -1.518
 Q_b_new = 1.89
-Q_c_new = -2	# CHANGed for REVISION -2
-Q_d_new = -2	# CHANGed for REVISION -2
+Q_c_new = -4	# CHANGed for REVISION -4
+Q_d_new = -4	# CHANGed for REVISION -4
 # Plot info
 FIGURE_NUM = 1
 SHOW_FIG = 1
@@ -1305,7 +1305,7 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 	plt.xticks(np.arange(0, video_length+1, 50))
 	plt.yticks(np.arange(400, 1201, 400))
 	plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)	
-	plt.axis([0, video_length, 0, 1000])
+	plt.axis([0, video_length, 0, 1200])
 
 	g.show()
 	raw_input()

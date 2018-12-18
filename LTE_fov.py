@@ -1,29 +1,16 @@
 import scipy.io as sio
 import numpy as np
 import matplotlib.pyplot as plt
-import load_5G
+import load_LTE
 import math
-import utilities as uti
+import utilities_lte as uti
 
-
-VIDEO_LEN = 300
+VIDEO_LEN = 450
+REGULAR_CHANNEL_TRACE = './traces/bandwidth/bus_test_1.txt' 
 VIDEO_FPS = 30
 
-REVISION = 1
-
-REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_5.txt'  # 1: partially disturbed  2: unstable  3: stable   4: medium_liyang 5:medium_fanyi
-
-if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':
-	VIDEO_LEN = 450
-REGULAR_MULTIPLE = 1
-REGULAR_ADD = 0
-
-if not REVISION:
-	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_9_alpha_beta_new.mat'    ##  9 for 1,  13 for 2, in previous version
-	USER = -1
-else:
-	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'		# For revision
-	USER = 0		# <========================= CHange USER to change FOV trace  0 for 1 (index 2 here),  6 for 2 (index 3 here)
+VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'		# For revision
+USER = 0		# <========================= CHange USER to change FOV trace  0 for 1 (index 2 here),  6 for 2 (index 3 here)
 
 
 if VIEWPORT_TRACE_FILENAME_NEW == './traces/output/Video_9_alpha_beta_new.mat':
@@ -36,18 +23,10 @@ elif VIEWPORT_TRACE_FILENAME_NEW == './traces/output/gt_theta_phi_vid_3.p':
 	elif USER == 6:
 		ALPHA_INDEX = 3
 
-if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_0.txt':
+if REGULAR_CHANNEL_TRACE == './traces/bandwidth/bus_test_1.txt' :
 	GAMMA_INDEX = 0
-elif REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_1.txt':
+else:
 	GAMMA_INDEX = 1
-elif REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_2.txt':
-	GAMMA_INDEX = 2
-elif REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_3.txt':
-	GAMMA_INDEX = 3
-elif REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_4.txt':
-	GAMMA_INDEX = 4
-elif REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':
-	GAMMA_INDEX = 5
 
 
 BUFFER_INIT = 2
@@ -290,12 +269,11 @@ class Streaming(object):
 		return 
 
 def main():
-	half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, VIDEO_LEN, REGULAR_MULTIPLE, REGULAR_ADD)
-	average_bw = uti.show_network(network_trace)
-	if not REVISION:
-		yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN)
-	else:
-		yaw_trace, pitch_trace = uti.load_pickle_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN, USER)
+	network_trace = load_LTE.load_lte_data(REGULAR_CHANNEL_TRACE, VIDEO_LEN)
+
+	average_bw, std_bw = uti.show_network(network_trace)
+
+	yaw_trace, pitch_trace = uti.load_pickle_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN, USER)
 
 	video_rate = uti.generate_fov_rate()
 

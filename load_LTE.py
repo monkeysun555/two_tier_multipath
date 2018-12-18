@@ -4,7 +4,7 @@ import utilities_lte as uti
 import matplotlib.pyplot as plt
 
 
-FILE_LIST = ['./traces/bandwidth/bus_LTE_4.txt']
+FILE_LIST = ['./traces/bandwidth/bus_test_2.txt']
 VIDEO_LENGTH = 450
 
 

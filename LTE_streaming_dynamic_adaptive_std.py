@@ -4,34 +4,27 @@
 import scipy.io as sio
 import numpy as np
 import matplotlib.pyplot as plt
-import load_5G
+import load_LTE
 import math
-import utilities as uti
+import utilities_lte as uti
 
-DO_DYNAMIC = 0		# always be 1 here, static is done on fix 
+DO_DYNAMIC = 1		# always be 1 here, static is done on fix 
 CODING_TYPE = 2
-VIDEO_LEN = 300
+VIDEO_LEN = 450
 VIDEO_FPS = 30
 UPDATE_FREQUENCY = 30
 # BW trace
-REGULAR_CHANNEL_TRACE = './traces/bandwidth/BW_Trace_5G_5.txt' 
+REGULAR_CHANNEL_TRACE = './traces/bandwidth/bus_test_1.txt'  
 
-if REGULAR_CHANNEL_TRACE == './traces/bandwidth/BW_Trace_5G_5.txt':
-	VIDEO_LEN = 450
-# DELAY_TRACE = 'delay_1.txt'
-REGULAR_MULTIPLE = 1
-REGULAR_ADD = 0
-
-
-# VP trace
 # For JETCAS revision
-REVISION = 1
-if not REVISION:
-	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/Video_13_alpha_beta_new.mat'    ##  9 for 1,  13 for 2
-	USER = -1
-else:
-	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'    ##  0 for 1,  6 for 2
-	USER = 6				#  <=====================    Change here to control the fov trace for REVISION
+VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'    
+USER = 0				#  <=====================    Change here to control the fov trace for REVISION,  0 for 1,  6 for 2
+
+# System parameters
+BUFFER_BL_INIT = 10
+BUFFER_EL_INIT = 1
+Q_REF_BL = 10
+Q_REF_EL = 1				#<=============Change for calculating gamma curve for a specific bw trace
 
 # System parameters
 BUFFER_BL_INIT = 10
@@ -41,18 +34,16 @@ Q_REF_EL = 1
 ET_MAX_PRED = Q_REF_EL + 1
 
 CHUNK_DURATION = 1.0
-
 #Others
 KP = 0.6		# P controller
 KI = 0.01		# I controller
 PI_RANGE = 10
-DELAY = 0.01		# second
+DELAY = 0.01		# in second
 PI_SMOOTH = 1
 
-# For alpha/gamma curve length
+# For alpha/gamma
 BUFFER_RANGE = 4
 BW_DALAY_RATIO = 0.95
-
 
 class Streaming(object):
 	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut, optimal_buffer_length, alpha_idx, gamma_idx, std_bw):
@@ -481,20 +472,14 @@ class Streaming(object):
 
 
 def main():
-	half_sec_network_trace, network_trace = load_5G.load_5G_Data(REGULAR_CHANNEL_TRACE, VIDEO_LEN, REGULAR_MULTIPLE, REGULAR_ADD)
-	average_bw, std_bw = uti.show_network(network_trace)
-	print("above is real value")
-	# average_bw, std_bw = uti.show_network(network_trace[:150])
 	
-	if not REVISION:
-			yaw_trace, pitch_trace = uti.load_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN)
-	else:
-		yaw_trace, pitch_trace = uti.load_pickle_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN, USER)
+	network_trace = load_LTE.load_lte_data(REGULAR_CHANNEL_TRACE, VIDEO_LEN)
 
-	if not REVISION:
-			init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE)
-	else:
-		init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE, user = USER, do_dynamic = DO_DYNAMIC)
+	average_bw, std_bw = uti.show_network(network_trace)
+
+	yaw_trace, pitch_trace = uti.load_pickle_viewport(VIEWPORT_TRACE_FILENAME_NEW, VIDEO_LEN, USER)
+
+	init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = uti.load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, VIEWPORT_TRACE_FILENAME_NEW, CODING_TYPE, user = USER, do_dynamic = DO_DYNAMIC)
 	
 	video_trace = uti.generate_video_trace(init_video_rate, VIDEO_LEN)
 

@@ -16,7 +16,7 @@ CHUNK_DURATION = 1.0
 ALPHA_DYNAMIC = 1	# <======================= alpha control
 IS_NON_LAYERED = 1  # <======================= whether it is non-layered coding
 IS_SAVING = 0		# for non-dynamic. set to zero
-IS_SAVING_STATIC = 0	# To save naive 360, FOV only benchmarks, not test on fov 2, disable for FoV 2, could used for USER 0 but NOT for 6 (revision)
+IS_SAVING_STATIC = 1	# To save naive 360, FOV only benchmarks, not test on fov 2, disable for FoV 2, could used for USER 0 but NOT for 6 (revision)
 REVISION = 1
 BUFFER_RANGE = 4
 ALPHA_CAL_LEN = 30
@@ -36,16 +36,17 @@ ALPHA_CURVE = [[0.966, 0.929, 0.882, 0.834],\
 GAMMA_CURVE = [[0.99, 1.0, 1.0, 1.0],\
 			   [0.88, 0.895, 0.92, 0.93],\
 			   [0.793, 0.824, 0.857, 0.889],\
-			   [0.699, 0.728, 0.763, 0.794]]
+			   [0.699, 0.728, 0.763, 0.794],\
+			   [0.786, 0.796, 0.828, 0.850]]
 
-BT_RATES = [0.1, 0.3, 0.5, 0.8]
-ET_RATES = [1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 12.0]
+BT_RATES = [0.1, 0.3, 0.5, 0.7, 1.0, 1.5, 2.0, 2.5]
+ET_RATES = [3.0, 4.0, 5.0, 7.5, 10.0, 12.5, 15.0]
 # Rate Allocation
 BITRATE_LEN = 4
-INIT_BL_RATIO = 0.3
-INIT_EL_RATIO = 0.7	
-EL_LOWEST_RATIO = 0.8		# Change for LTE
-EL_HIGHER_RATIO = 1.2		# Change for LTE
+INIT_BL_RATIO = 0.2
+INIT_EL_RATIO = 0.8	
+EL_LOWEST_RATIO = 0.7		# Change for LTE
+EL_HIGHER_RATIO = 1.3		# Change for LTE
 BW_UTI_RATIO = 0.85
 BW_DALAY_RATIO = 0.95
 
@@ -72,15 +73,15 @@ VP_ET_RATIO = (VP_HOR_SPAN*VP_VER_SPAN)/(ET_HOR_SPAN*ET_VER_SPAN)
 BUFFER_BL_INIT = 10
 BUFFER_EL_INIT = 1
 
-Q_a = 11.96		# This is for each frame, derivation: 6.33 + 1.655 * ln(30) = 11.444
-Q_b = 1.655	
-Q_c = -2	# CHANGed for REVISION -2
-Q_d = -2	# CHANGed for REVISION -2
+Q_a = 11.682		# This is for each frame, derivation: 6.33 + 1.655 * ln(30) = 11.444
+Q_b = 1.5715	
+Q_c = -4	# CHANGed for REVISION -5
+Q_d = -4	# CHANGed for REVISION -5
 
-Q_a_new = 6.33
-Q_b_new = 1.655
-Q_c_new = -2	# CHANGed for REVISION -2
-Q_d_new = -2	# CHANGed for REVISION -2
+Q_a_new = 6.337
+Q_b_new = 1.5715
+Q_c_new = -4	# CHANGed for REVISION -5
+Q_d_new = -4	# CHANGed for REVISION -5
 # Plot info
 FIGURE_NUM = 1
 SHOW_FIG = 1
@@ -215,7 +216,7 @@ def record_alpha(yaw_trace, pitch_trace, display_time, video_length, buffer_rang
 def update_gamma(average_bw, std_bw):
 	# Fix gamma
 	current_std_mean_ratio = std_bw/average_bw
-	std_mean_ratios = [22.51/734.34, 85.92/722.80, 154.81/719.03, 206.73/659.67, 277.10/585.31]
+	std_mean_ratios = [1.56/7.92, 2.82/9.60, 3.23/7.37, 1.55/2.70]
 	std_mean_array = np.asarray(std_mean_ratios)
 	idx = (np.abs(std_mean_array - current_std_mean_ratio)).argmin()
 	return GAMMA_CURVE[idx]
@@ -303,16 +304,18 @@ def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate
 	if not calculate_gamma:
 		rate_cut = [0.0] * BITRATE_LEN
 
-		rate_cut[0] = INIT_BL_RATIO * BW_UTI_RATIO * average_bw
-		rate_cut[1] = INIT_EL_RATIO * EL_LOWEST_RATIO * BW_UTI_RATIO * average_bw
-		rate_cut[2] = INIT_EL_RATIO * BW_UTI_RATIO * average_bw
-		rate_cut[3] = INIT_EL_RATIO * EL_HIGHER_RATIO * BW_UTI_RATIO * average_bw
+		# rate_cut[0] = INIT_BL_RATIO * BW_UTI_RATIO * average_bw
+		# rate_cut[1] = INIT_EL_RATIO * EL_LOWEST_RATIO * BW_UTI_RATIO * average_bw
+		# rate_cut[2] = INIT_EL_RATIO * BW_UTI_RATIO * average_bw
+		# rate_cut[3] = INIT_EL_RATIO * EL_HIGHER_RATIO * BW_UTI_RATIO * average_bw
 
 		# For generating gamma
-		# rate_cut[0] = 0.5
-		# rate_cut[1] = 2.0
-		# rate_cut[2] = 6.0
-		# rate_cut[3] = 10.0
+		testing_bt = 1.3924
+		testing_et = 3.7043928
+		rate_cut[0] = testing_bt
+		rate_cut[1] = EL_LOWEST_RATIO*testing_et
+		rate_cut[2] = testing_et
+		rate_cut[3] = EL_HIGHER_RATIO*testing_et
 
 		print(rate_cut)
 		optimal_buffer_len = buffer_setting
@@ -329,10 +332,10 @@ def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate
 			elif user == 6:
 				alpha_index = 3
 
-		if video_file == './traces/bandwidth/bus_LTE_1.txt':
-			gamma_index = 6
+		if video_file == './traces/bandwidth/bus_test_1.txt':
+			gamma_index = 4
 		else:
-			gamma_index = 7
+			gamma_index = 5
 		
 		alpha_curve = ALPHA_CURVE[alpha_index]
 		gamma_curve = GAMMA_CURVE[gamma_index]
@@ -341,6 +344,7 @@ def load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calculate
 			rate_cut, optimal_buffer_len = calculate_rate_cute_non_layer(average_bw, alpha_curve, gamma_curve, coding_type)
 		# For dynamic, use fix init
 		else:
+			# initial
 			rate_cut = [BT_RATES[2], ET_RATES[0], ET_RATES[2], ET_RATES[4]]
 			optimal_buffer_len = 1
 
@@ -540,14 +544,14 @@ def generate_360_rate():
 	# Previous
 	# return [100, 250, 400, 550, 700, 850]
 	# Revision
-	return [100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850]
+	return [0.1, 0.3, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 7.5, 10.0, 12.5, 15.0]
 
 
 def generate_fov_rate():
 	# Previous
 	# return [100, 250, 400, 550, 700, 850]
 	# Revision
-	return [100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850]
+	return [0.1, 0.3, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 7.5, 10.0, 12.5, 15.0]
 
 def quantize_bt_et_rate(ave_bw, bt, et1, et2, et3):
 	if bt < BT_RATES[0] or bt > BT_RATES[-1] or et2 < ET_RATES[0] or et2 > ET_RATES[-1]:
@@ -1133,10 +1137,10 @@ def show_360_result(streaming, video_length, inti_buffer_length):
 	rate = streaming.rates
 	rebuff = 0.0
 	for i in range(inti_buffer_length):
-		deliver_bitrate[i] += rate[-3]
-		display_bitrate[i] += VP_BT_RATIO * rate[-3]
-		quality[i] += get_quality(VP_BT_RATIO*rate[-3]/VIDEO_FPS, 0.0, 0.0) 
-		new_quality[i] += new_get_quality(VP_BT_RATIO*rate[-3], 0.0, 0.0)
+		deliver_bitrate[i] += rate[-8]
+		display_bitrate[i] += VP_BT_RATIO * rate[-8]
+		quality[i] += get_quality(VP_BT_RATIO*rate[-8]/VIDEO_FPS, 0.0, 0.0) 
+		new_quality[i] += new_get_quality(VP_BT_RATIO*rate[-8], 0.0, 0.0)
 
 	for i in range(len(info)):
 		deliver_bitrate[info[i][0]] += rate[info[i][1]]
@@ -1183,17 +1187,14 @@ def show_360_result(streaming, video_length, inti_buffer_length):
 	plt.tick_params(axis='both', which='major', labelsize=30)
 	plt.tick_params(axis='both', which='minor', labelsize=30)
 	plt.xticks(np.arange(0, video_length+1, 50))
-	plt.yticks(np.arange(400, 1201, 400))
+	plt.yticks(np.arange(5, 15, 5))
 	plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)	
-	plt.axis([0, video_length, 0, 1100])
+	plt.axis([0, video_length, 0, 15])
 
 	g.show()
 	raw_input()
 	if IS_SAVING_STATIC:
-		if not REVISION:
-			g.savefig('./figures/naive360/naive_'+str(streaming.network_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
-		else:
-			g.savefig('./figures/naive360/naive_'+str(streaming.network_file)+'_revision.eps', format='eps', dpi=1000, figsize=(30, 10))
+		g.savefig('./figures/lte/lte_naive360/naive_'+str(streaming.network_file)+'_lte.eps', format='eps', dpi=1000, figsize=(30, 10))
 
 def show_fov_result(streaming, video_length, inti_buffer_length):
 	print("length of record is: %s" % len(streaming.evr_recordset))
@@ -1277,14 +1278,11 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 	plt.tick_params(axis='both', which='major', labelsize=30)
 	plt.tick_params(axis='both', which='minor', labelsize=30)
 	plt.xticks(np.arange(0, video_length+1, 50))
-	plt.yticks(np.arange(400, 1201, 400))
+	plt.yticks(np.arange(5, 15, 5))
 	plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)	
-	plt.axis([0, video_length, 0, 1000])
+	plt.axis([0, video_length, 0, 15])
 
 	g.show()
 	raw_input()
 	if IS_SAVING_STATIC:
-		if not REVISION:
-			g.savefig('./figures/predictive/pred_'+str(streaming.network_file)+'_'+str(streaming.fov_file)+'.eps', format='eps', dpi=1000, figsize=(30, 10))
-		else:
-			g.savefig('./figures/predictive/pred_'+str(streaming.network_file)+'_'+str(streaming.fov_file)+'_revision.eps', format='eps', dpi=1000, figsize=(30, 10))
+		g.savefig('./figures/lte/lte_predictive/pred_'+str(streaming.network_file)+'_'+str(streaming.fov_file)+'_lte.eps', format='eps', dpi=1000, figsize=(30, 10))
