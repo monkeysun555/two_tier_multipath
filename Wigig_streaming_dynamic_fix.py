@@ -34,7 +34,7 @@ if not REVISION:
 	USER = -1
 else:
 	VIEWPORT_TRACE_FILENAME_NEW = './traces/output/gt_theta_phi_vid_3.p'    ##  0 for 1,  6 for 2
-	USER = 6				#  <=====================    Change here to control the fov trace for REVISION
+	USER = 0				#  <=====================    Change here to control the fov trace for REVISION
 CMP_VP_TRACE_FILENAME = './traces/output/gt_theta_phi.p'
 
 # System parameters
@@ -139,7 +139,7 @@ class Streaming(object):
 					if not COMPARISON:
 						new_rate_cut, new_target_et_buffer = uti.rate_optimize(self.display_time, \
 														average_bw, std_bw, self.alpha_history,\
-														VIEWPORT_TRACE_FILENAME_NEW, self.rate_cut_version)
+														self.rate_cut_version, VIEWPORT_TRACE_FILENAME_NEW)
 					else:
 						new_rate_cut, new_target_et_buffer = comparison.cmp_rate_optimize(self.display_time, \
 														average_bw, std_bw, self.alpha_history,\

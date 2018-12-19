@@ -46,12 +46,12 @@ BUFFER_RANGE = 4
 BW_DALAY_RATIO = 0.95
 
 class Streaming(object):
-	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut, optimal_buffer_length, alpha_idx, gamma_idx, std_bw):
+	def __init__(self, network_trace, yaw_trace, pitch_trace, video_trace, rate_cut, optimal_buffer_length, alpha_idx, gamma_idx, std_bw, user):
 		self.dy_type = 'std_adaptive'
 		self.fov_file = alpha_idx
 		self.network_file = gamma_idx
 		self.dynamic = DO_DYNAMIC
-
+		self.user = user 
 
 		self.network_trace = network_trace
 		self.yaw_trace = yaw_trace
@@ -92,6 +92,7 @@ class Streaming(object):
 		self.last_ref_bw = rate_cut[0] + rate_cut[2]
 		self.last_ref_time = 0.0
 		self.last_ref_relative_std = std_bw/(rate_cut[0] + rate_cut[2])
+		self.last_ref_alpha = [0.857, 0.776, 0.713, 0.671]	# Randomly initial is fine
 
 		self.yaw_predict_value = 0.0
 		self.yaw_predict_quan = 0
@@ -114,12 +115,12 @@ class Streaming(object):
 			if not self.download_partial:
 				# adaptive rate allocation at fix frequency
 				if DO_DYNAMIC:
-					updating_bw, current_period_bw, current_period_std, currend_real_bw = self.check_bw_status()
-					if updating_bw:
+					updating, current_period_bw, current_period_std, current_real_bw, alpha_curve = self.check_bw_fov_status()
+					if updating:
 						self.alpha_history[-1][2] = self.rate_cut_version + 1
 						new_rate_cut, new_target_et_buffer = uti.rate_optimize(self.display_time, \
 														current_period_bw, current_period_std, \
-														self.alpha_history, VIEWPORT_TRACE_FILENAME_NEW, self.rate_cut_version)
+														self.alpha_history, self.rate_cut_version, VIEWPORT_TRACE_FILENAME_NEW,  user = self.user)
 						self.rate_cut.append(new_rate_cut)
 						self.rate_cut_version += 1
 						self.rate_cut_time.append(self.display_time)
@@ -153,21 +154,24 @@ class Streaming(object):
 			if not self.download_partial and recording_el:
 				print("need recoding el")
 
-	def check_bw_status(self):
+
+	def check_bw_fov_status(self):
 		bw_current_period, std_current_period, bw_real = uti.cal_average_bw(self.network_time, self.video_bw_history, \
 												self.last_ref_time)
+		alpha_curve = uti.realtime_alpha(self.alpha_history)
+		# Time is checked by cal_average_bw
 		# Current period time is too short
 		if bw_current_period < 0:
-			return False, bw_current_period, std_current_period, bw_real
+			return False, bw_current_period, std_current_period, bw_real, alpha_curve
 		else:
-			if uti.is_bw_std_change(bw_current_period, std_current_period, self.last_ref_bw, self.last_ref_relative_std):
+			if uti.is_bw_std_change(bw_current_period, std_current_period, self.last_ref_bw, self.last_ref_relative_std) or uti.is_fov_change(alpha_curve, self.last_ref_alpha):
 				self.last_ref_bw = bw_current_period
 				self.last_ref_relative_std = std_current_period/bw_current_period
 				self.last_ref_time = self.network_time
-				print(self.last_ref_relative_std)
-				return True, bw_current_period, std_current_period, bw_real
+				self.last_ref_alpha = alpha_curve
+				return True, bw_current_period, std_current_period, bw_real, alpha_curve
 			else:
-				return False, bw_current_period, std_current_period, bw_real
+				return False, bw_current_period, std_current_period, bw_real, alpha_curve
 
 	def calculate_alpha(self, buffer_range = BUFFER_RANGE):
 		# print("calculate alpha time is: %s" %self.display_time)
@@ -483,7 +487,7 @@ def main():
 	
 	video_trace = uti.generate_video_trace(init_video_rate, VIDEO_LEN)
 
-	streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx, std_bw)
+	streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx, std_bw, user=USER)
 		
 	streaming_sim.run()
 

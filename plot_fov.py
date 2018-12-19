@@ -8,7 +8,7 @@ import pickle
 
 VIDEO_LEN = 450
 VIDEO_FPS = 30
-IS_SAVING = 0
+IS_SAVING = 1
 ALPHA_AHEAD = 0.5
 
 REVISION = 1
@@ -17,8 +17,8 @@ TSINGHUA_TRACE = 1
 USER_1 = 0
 USER_2 = 6
 # For plot yaw, shit by 180; otherwise, the point is changing around -180 and 180. 
-SHIFT = 0	
-
+SHIFT = 1	# For ploting	
+DO_STATISTIC = 0	# For prob counting
 def main():
 
 	if not REVISION:
@@ -71,7 +71,7 @@ def main():
 			yaw_vid_3 = (contents_3['gt_theta']/math.pi)*180.0
 			pitch_vid_3 = (contents_3['gt_phi']/math.pi)*180.0 - 90.0
 
-			print(len(yaw_vid_1[USER_1]), len(yaw_vid_2[USER_1]))
+			# print(len(yaw_vid_1[USER_1]), len(yaw_vid_2[USER_1]))
 			
 			# print(yaw_vid_1[USER_1], len(yaw_vid_1[USER_1]))
 			yaw_trace_data_1 = yaw_vid_1[USER_1].tolist() + yaw_vid_2[USER_1].tolist() + yaw_vid_3[USER_1].tolist()
@@ -85,37 +85,38 @@ def main():
 			# 0: top, 1: bottom, 2: front, 3: back, 4:left, 5:right
 			# pitch: -90 to 90
 			# yaw: -180 to 180
-			total_prob = [];
-			for u_id in range(len(yaw_vid_1)):
-				temp_yaw_trace = yaw_vid_1[u_id].tolist() + yaw_vid_2[u_id].tolist() + yaw_vid_3[u_id].tolist()
-				temp_pitch_trace = pitch_vid_1[u_id].tolist() + pitch_vid_2[u_id].tolist() + pitch_vid_3[u_id].tolist()
-				# print(min(temp_yaw_trace), max(temp_yaw_trace))
-				temp_et_count = [0.0]*6
-				temp_prob = []
+			if DO_STATISTIC:
+				total_prob = [];
+				for u_id in range(len(yaw_vid_1)):
+					temp_yaw_trace = yaw_vid_1[u_id].tolist() + yaw_vid_2[u_id].tolist() + yaw_vid_3[u_id].tolist()
+					temp_pitch_trace = pitch_vid_1[u_id].tolist() + pitch_vid_2[u_id].tolist() + pitch_vid_3[u_id].tolist()
+					# print(min(temp_yaw_trace), max(temp_yaw_trace))
+					temp_et_count = [0.0]*6
+					temp_prob = []
 
-				for i in range(len(temp_yaw_trace)):
-					if temp_pitch_trace[i] > 45:
-						temp_et_count[0] += 1
-					elif temp_pitch_trace[i] < -45:
-						temp_et_count[1] += 1
-					else:
-						temp_yaw_trace[i]  += 180.0
-						if temp_yaw_trace[i] >= 45.0 and temp_yaw_trace[i] < 135.0:
-							temp_et_count[5] += 1
-						elif temp_yaw_trace[i] >= 135.0 and temp_yaw_trace[i] < 225.0:
-							temp_et_count[3] += 1
-						elif temp_yaw_trace[i] >= 225.0 and temp_yaw_trace[i] < 315.0:
-							temp_et_count[4] += 1
+					for i in range(len(temp_yaw_trace)):
+						if temp_pitch_trace[i] > 45:
+							temp_et_count[0] += 1
+						elif temp_pitch_trace[i] < -45:
+							temp_et_count[1] += 1
 						else:
-							temp_et_count[2] += 1
-				print(temp_et_count)
-				temp_prob = [count/sum(temp_et_count) for count in temp_et_count]
-				total_prob.append(temp_prob)
-			over_prob = [0.0]*6;
-			for j in range(6):
-				over_prob[j] = sum([prob[j]/len(total_prob) for prob in total_prob])
-			print(over_prob)
-			assert round(sum(over_prob),3) == 1.0
+							temp_yaw_trace[i]  += 180.0
+							if temp_yaw_trace[i] >= 45.0 and temp_yaw_trace[i] < 135.0:
+								temp_et_count[5] += 1
+							elif temp_yaw_trace[i] >= 135.0 and temp_yaw_trace[i] < 225.0:
+								temp_et_count[3] += 1
+							elif temp_yaw_trace[i] >= 225.0 and temp_yaw_trace[i] < 315.0:
+								temp_et_count[4] += 1
+							else:
+								temp_et_count[2] += 1
+					# print(temp_et_count)
+					temp_prob = [count/sum(temp_et_count) for count in temp_et_count]
+					total_prob.append(temp_prob)
+				over_prob = [0.0]*6;
+				for j in range(6):
+					over_prob[j] = sum([prob[j]/len(total_prob) for prob in total_prob])
+				print(over_prob)
+				assert round(sum(over_prob),3) == 1.0
 			# n, bins, patches=plt.hist(yaw_trace_data_1)
 			# plt.show()
 			# raw_input()

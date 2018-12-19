@@ -55,7 +55,7 @@ Q_REF = 2
 BUFFER_THRESH = Q_REF + 2
 
 CHUNK_DURATION = 1.0
-KP = 0.45		# P controller
+KP = 0.6		# P controller
 KI = 0.01		# I controller
 PI_RANGE = 10
 DELAY = 0.01		# second

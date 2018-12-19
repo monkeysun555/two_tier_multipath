@@ -15,23 +15,25 @@ CHUNK_DURATION = 1.0
 # GAMMA_CAL_LEN is the length of calculating gamma, in seconds
 ALPHA_DYNAMIC = 1	# <======================= alpha control
 IS_NON_LAYERED = 1  # <======================= whether it is non-layered coding
-IS_SAVING = 0		# for non-dynamic. set to zero
+IS_SAVING = 1		# for non-dynamic. set to zero
 IS_SAVING_STATIC = 0	# To save naive 360, FOV only benchmarks, not test on fov 2, disable for FoV 2, could used for USER 0 but NOT for 6 (revision)
 REVISION = 1
 BUFFER_RANGE = 4
-ALPHA_CAL_LEN = 30
-MIN_ALPHA_CAL_LEN = 30
+ALPHA_CAL_LEN = 33
+MIN_ALPHA_CAL_LEN = 10
 GAMMA_CAL_LEN = 10
 BW_THRESHOLD = 0.1
 STD_THRESHOLD = 0.1
-ALPHA_AHEAD = 1.0
+ALPHA_AHEAD = 1.
+ALPHA_THRES = 0.2
+
 # FIX_INIT = 0	# to control initial setting, for static two tier, disable this value to do optimization. For dynamic, use this for fix initial
 
 # alpha curve: FOV 1, FOV 2 (in previous version,) and then USER 0, USER 6 (for revision)
 ALPHA_CURVE = [[0.966, 0.929, 0.882, 0.834],\
 				[0.877, 0.786, 0.707, 0.637],\
-				[0.933, 0.878, 0.836, 0.800],\
-				[0.857, 0.776, 0.713, 0.671]]
+				[0.918, 0.847, 0.800, 0.761],\
+				[0.845, 0.753, 0.696, 0.646]]
 
 GAMMA_CURVE = [[0.99, 1.0, 1.0, 1.0],\
 			   [0.88, 0.895, 0.92, 0.93],\
@@ -45,8 +47,8 @@ ET_RATES = [3.0, 4.0, 5.0, 7.5, 10.0, 12.5, 15.0]
 BITRATE_LEN = 4
 INIT_BL_RATIO = 0.2
 INIT_EL_RATIO = 0.8	
-EL_LOWEST_RATIO = 0.7		# Change for LTE
-EL_HIGHER_RATIO = 1.3		# Change for LTE
+EL_LOWEST_RATIO = 0.5		# Change for LTE
+EL_HIGHER_RATIO = 1.5		# Change for LTE
 BW_UTI_RATIO = 0.85
 BW_DALAY_RATIO = 0.95
 
@@ -75,13 +77,13 @@ BUFFER_EL_INIT = 1
 
 Q_a = 11.682		# This is for each frame, derivation: 6.33 + 1.655 * ln(30) = 11.444
 Q_b = 1.5715	
-Q_c = -4	# CHANGed for REVISION -5
-Q_d = -4	# CHANGed for REVISION -5
+Q_c = -1	# CHANGed for REVISION -5
+Q_d = -1	# CHANGed for REVISION -5
 
 Q_a_new = 6.337
 Q_b_new = 1.5715
-Q_c_new = -4	# CHANGed for REVISION -5
-Q_d_new = -4	# CHANGed for REVISION -5
+Q_c_new = -1	# CHANGed for REVISION -5
+Q_d_new = -1	# CHANGed for REVISION -5
 # Plot info
 FIGURE_NUM = 1
 SHOW_FIG = 1
@@ -90,7 +92,7 @@ SHOW_FIG = 1
 # 2 for non-layered coding
 def rate_optimize(display_time, average_bw, std_bw, alpha_history, version, fov_file, coding_type = 2, user = 0):
 	gamma_curve = update_gamma(average_bw, std_bw)
-	alpha_curve = update_alpha(display_time, alpha_history, fov_file, version, user=user)
+	alpha_curve = update_alpha(display_time, alpha_history, version, fov_file, user=user)
 	alpha_gamma = np.multiply(alpha_curve, gamma_curve)
 	optimal_alpha_gamma = np.amax(alpha_gamma)
 	optimal_buffer_len = np.argmax(alpha_gamma)
@@ -127,7 +129,7 @@ def rate_optimize(display_time, average_bw, std_bw, alpha_history, version, fov_
 
 def rate_optimize_std(display_time, average_bw, std_bw, alpha_history, version, fov_file, coding_type = 2):
 	gamma_curve = update_gamma(average_bw, std_bw)
-	alpha_curve = update_alpha(display_time, alpha_history, fov_file, version)
+	alpha_curve = update_alpha(display_time, alpha_history,version, fov_file)
 	alpha_gamma = np.multiply(alpha_curve, gamma_curve)
 	optimal_alpha_gamma = np.amax(alpha_gamma)
 	optimal_buffer_len = np.argmax(alpha_gamma)
@@ -163,6 +165,25 @@ def rate_optimize_std(display_time, average_bw, std_bw, alpha_history, version, 
 	return rate_cuts, optimal_buffer_len
 
 
+def realtime_alpha(alpha_history, buffer_range = BUFFER_RANGE):
+	alpha = [0.0]*buffer_range
+	alpha_calculation_len = 0
+	if len(alpha_history) > ALPHA_CAL_LEN:
+		alpha_calculation_len = ALPHA_CAL_LEN - 3
+		for i in range(buffer_range):
+			temp_alpha = 0.0
+			temp_alpha_count = 0
+			for j in range(alpha_calculation_len-3):
+				temp_alpha += alpha_history[-(j+i+2)][1][i][4]
+				temp_alpha_count += 1
+			if temp_alpha_count == 0:
+				alpha[i] = 0.0
+			else:
+				alpha[i] = temp_alpha/temp_alpha_count
+		return alpha
+	else:
+		return [0.857, 0.776, 0.713, 0.671]	# Random initial alpha
+
 def cal_average_bw(network_time, bw_history, last_ref_time):
 	average_gamma_bw = 0.0
 	std_gamma_bw = 0.0
@@ -185,6 +206,15 @@ def cal_average_bw(network_time, bw_history, last_ref_time):
 		std_gamma_bw = np.std(temp_bw)
 		average_gamma_real = np.sum(temp_real)/len(temp_real)
 	return average_gamma_bw, std_gamma_bw, average_gamma_real
+
+def is_fov_change(alpha, ref_alpha):
+	a=np.array(alpha)
+	b=np.array(ref_alpha)
+	distance = np.linalg.norm(a-b)
+	if distance >= ALPHA_THRES:
+		return True
+	else:
+		return False
 
 def is_bw_change(current_bw, ref_bw):
 	if current_bw >= (1+BW_THRESHOLD)*ref_bw or current_bw <= (1-BW_THRESHOLD)*ref_bw:
@@ -238,7 +268,7 @@ def update_alpha(display_time, alpha_history, version, fov_file, buffer_range = 
 			for i in range(buffer_range):
 				temp_alpha = 0.0
 				temp_alpha_count = 0
-				for j in range(alpha_calculation_len):
+				for j in range(alpha_calculation_len-3):
 					temp_alpha += alpha_history[-(j+i+2)][1][i][4]
 					temp_alpha_count += 1
 				if temp_alpha_count == 0:
@@ -264,9 +294,9 @@ def update_alpha(display_time, alpha_history, version, fov_file, buffer_range = 
 			elif fov_file == './traces/output/Video_13_alpha_beta_new.mat':
 				alpha = [0.877, 0.786, 0.707, 0.637]
 			elif fov_file == './traces/output/gt_theta_phi_vid_3.p' and user == 0:
-				alpha = [0.933, 0.878, 0.836, 0.800]
+				alpha = [0.918, 0.847, 0.800, 0.761]
 			elif fov_file == './traces/output/gt_theta_phi_vid_3.p' and user == 6:
-				alpha = [0.857, 0.776, 0.713, 0.671]
+				alpha = [0.845, 0.753, 0.696, 0.646]
 	else:
 		alpha = [0.911, 0.870, 0.814, 0.771]
 	
@@ -850,7 +880,7 @@ def show_buffer(streaming, video_length):
 			target_buffer_plot[i] = target_info[count] + 1
 
 		plt.plot(range(1, video_length+1), target_buffer_plot,'b^-', markersize = 4, markeredgewidth = 0.5, \
-				linewidth = 2, markeredgecolor = 'blue',  label='ET Target Buffer Length')
+				linewidth = 2, markeredgecolor = 'blue',  label='Target ET Buffer Length')
 
 	plt.plot(range(1, video_length+1), [row[0] for row in buffer_info],'k*-', markersize = 6, markeredgewidth = 0.5, \
 			linewidth = 2, markeredgecolor = 'black',  label='BT Buffer Length')
@@ -1190,11 +1220,11 @@ def show_fov_result(streaming, video_length, inti_buffer_length):
 	black_count = 0
 	# rebuff = 0.0
 	for i in range(inti_buffer_length):
-		deliver_bitrate[i] += rate[-3]
-		display_bitrate[i] += VP_ET_RATIO * rate[-3]
-		quality[i] += get_quality(VP_ET_RATIO*rate[-3], 0.0, 0.0) 
-		new_quality[i] += new_get_quality(VP_ET_RATIO*rate[-3], 0.0, 0.0)
-		q_r[i] += get_quality(VP_ET_RATIO*rate[-3], 0.0, 0.0)
+		deliver_bitrate[i] += rate[-8]
+		display_bitrate[i] += VP_ET_RATIO * rate[-8]
+		quality[i] += get_quality(VP_ET_RATIO*rate[-8], 0.0, 0.0) 
+		new_quality[i] += new_get_quality(VP_ET_RATIO*rate[-8], 0.0, 0.0)
+		q_r[i] += get_quality(VP_ET_RATIO*rate[-8], 0.0, 0.0)
 
 	for i in range(len(info)):
 		black = 0.0

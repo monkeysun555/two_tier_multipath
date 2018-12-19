@@ -113,7 +113,7 @@ class Streaming(object):
 					average_bw, std_bw, average_bw_real = uti.get_average_bw(self.display_time, self.video_bw_history, self.rate_cut_version)
 					new_rate_cut, new_target_et_buffer = uti.rate_optimize(self.display_time, \
 													average_bw, std_bw, self.alpha_history,\
-													VIEWPORT_TRACE_FILENAME_NEW, self.rate_cut_version, user=USER)
+													self.rate_cut_version, VIEWPORT_TRACE_FILENAME_NEW, user=USER)
 					self.rate_cut.append(new_rate_cut)
 					self.rate_cut_version += 1
 					self.rate_cut_time.append(self.display_time)

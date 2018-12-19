@@ -29,12 +29,12 @@ else:
 	GAMMA_INDEX = 1
 
 
-BUFFER_INIT = 2
-Q_REF = 2
-BUFFER_THRESH = Q_REF + 2
+BUFFER_INIT = 1
+Q_REF = 1
+BUFFER_THRESH = Q_REF + 1
 
 CHUNK_DURATION = 1.0
-KP = 0.45		# P controller
+KP = 0.6		# P controller
 KI = 0.01		# I controller
 PI_RANGE = 10
 DELAY = 0.01		# second
