@@ -18,8 +18,8 @@ IS_NON_LAYERED = 1  # <======================= whether it is non-layered coding
 IS_SAVING = 0		# for non-dynamic. set to zero
 IS_SAVING_STATIC = 0	# For fov 2, disable all saving
 BUFFER_RANGE = 4
-ALPHA_CAL_LEN = 30
-MIN_ALPHA_CAL_LEN = 30
+ALPHA_CAL_LEN = 5
+MIN_ALPHA_CAL_LEN = 5
 GAMMA_CAL_LEN = 10
 BW_THRESHOLD = 0.1
 STD_THRESHOLD = 0.1
@@ -108,7 +108,7 @@ def cmp_load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calcu
 		# rate_cut[2] = 450
 		# rate_cut[3] = 550
 
-		print(rate_cut)
+		# print(rate_cut)
 		optimal_buffer_len = buffer_setting
 		alpha_index = -1
 		gamma_index = -1
@@ -143,7 +143,7 @@ def cmp_load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calcu
 		# rate_cut, optimal_buffer_len = calculate_rate_cute_non_layer(average_bw, alpha_curve, gamma_curve, coding_type)
 
 		rate_cut = [BT_RATES[0], ET_RATES[0], ET_RATES[1], ET_RATES[2]]
-		optimal_buffer_len = 1
+		optimal_buffer_len = 2
 	return rate_cut, optimal_buffer_len, alpha_index, gamma_index
 
 
@@ -151,7 +151,8 @@ def cmp_load_init_rates(average_bw, video_file, fov_file, coding_type = 2, calcu
 # 2 for non-layered coding
 def cmp_rate_optimize(display_time, average_bw, std_bw, alpha_history, version, fov_file, coding_type = 2):
 	gamma_curve = update_gamma(average_bw, std_bw)
-	alpha_curve = update_alpha(display_time, alpha_history, fov_file, version)
+	alpha_curve = update_alpha(display_time, alpha_history, version, fov_file)
+	# print(alpha_curve)
 	alpha_gamma = np.multiply(alpha_curve, gamma_curve)
 	optimal_alpha_gamma = np.amax(alpha_gamma)
 	optimal_buffer_len = np.argmax(alpha_gamma)
@@ -175,6 +176,7 @@ def cmp_rate_optimize(display_time, average_bw, std_bw, alpha_history, version, 
 	new_bt = cmp_quantize_bt_rate(rate_bt_average)
 
 	rate_cuts = [new_bt, ET_RATES[0], ET_RATES[1], ET_RATES[2]]
+	# print(optimal_buffer_len)
 
 	#update rate cut and rate cut version
 	# print("Do a optimzation, current time is %s" % display_time)
@@ -237,7 +239,10 @@ def update_alpha(display_time, alpha_history, version, fov_file, buffer_range = 
 		# alpha_calculation_len = np.minimum(len(alpha_history)-BUFFER_RANGE, ALPHA_CAL_LEN)
 		# print("alpha_history is: ", alpha_history, alpha_calculation_len)
 		assert alpha_calculation_len >= 1
+		# print(alpha_calculation_len)
 		if version > 0 and alpha_calculation_len >= MIN_ALPHA_CAL_LEN:	# 100 means will not triggered; if set to "0", change calculation of alpha_calculation_len to upper one
+			# print(alpha_calculation_len)
+			# print(alpha_history)
 			for i in range(buffer_range):
 				temp_alpha = 0.0
 				temp_alpha_count = 0
@@ -266,12 +271,18 @@ def update_alpha(display_time, alpha_history, version, fov_file, buffer_range = 
 				alpha = [0.966, 0.929, 0.882, 0.834]
 			elif fov_file == './traces/output/Video_13_alpha_beta_new.mat':
 				alpha = [0.877, 0.786, 0.707, 0.637]
+			else:
+				alpha = [0.966, 0.929, 0.882, 0.834]
 
 	# Statistic alpha curve
 	else:
 		alpha = [0.911, 0.870, 0.814, 0.771]
 	
 	return alpha
+
+def get_hitrate(current_time, hitrate, index):
+	return np.mean(hitrate[int(current_time)-1][index*VIDEO_FPS:(index+1)*VIDEO_FPS])
+
 
 def cmp_show_result(streaming, video_length, coding_type):
 	# record figures
@@ -340,7 +351,9 @@ def cmp_show_rates(streaming, video_length, coding_type = 2):
 	# <update> later
 	rate_cut = streaming.rate_cut
 	rebuf = streaming.freezing_time
-
+	# for hit rate
+	average_frame_quality_hit = [0.0]*video_length
+	average_frame_quality_hit_raw =[0.0]*video_length
 	# Layered coding
 	if coding_type == 1:
 		for i in range(BUFFER_BL_INIT):
@@ -361,6 +374,7 @@ def cmp_show_rates(streaming, video_length, coding_type = 2):
 
 		for i in range(len(el_info)):
 			time_eff = el_info[i][9]
+
 			start_frame_index = int((1 - time_eff + el_info[i][0])*VIDEO_FPS)
 			end_frame_index = int((1 + el_info[i][0])*VIDEO_FPS)
 
@@ -394,6 +408,8 @@ def cmp_show_rates(streaming, video_length, coding_type = 2):
 			receive_bitrate[i] = VP_ET_RATIO * rate_cut[0][-1]
 			deliver_bitrate[i] += rate_cut[0][-1]
 			average_frame_quality[i] += get_quality((VP_ET_RATIO * rate_cut[0][-1])/VIDEO_FPS, 0.0, 0.0)
+			average_frame_quality_hit[i] += get_quality((VP_ET_RATIO * rate_cut[0][-1])/VIDEO_FPS, 0.0, 0.0)
+			average_frame_quality_hit_raw[i] += get_quality((VP_ET_RATIO * rate_cut[0][-1])/VIDEO_FPS, 0.0, 0.0)
 			# print(average_frame_quality)
 			new_quality[i] += new_get_quality(VP_ET_RATIO * rate_cut[0][-1], 0.0, 0.0)
 			frame_quality_record[i] = 1
@@ -418,10 +434,27 @@ def cmp_show_rates(streaming, video_length, coding_type = 2):
 			real_pitch = el_info[i][8]
 			real_pitch_trace = streaming.pitch_trace[start_frame_index:end_frame_index]
 
+			# This if for TLP prediction accuracy calculation
 			el_accuracy = cal_accuracy(real_yaw, quan_yaw, real_pitch, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff)
+
+			#################################
+			# This is for using hitrate curve
+			chunk_hit = el_info[i][11]
+			effec_hit = []
+			hit_el_accuracy = 0.0
+			if time_eff != 0:
+				effec_hit = chunk_hit[int((1-time_eff)*VIDEO_FPS):VIDEO_FPS]
+				hit_el_accuracy = np.mean(effec_hit)
 
 			average_frame_quality[el_info[i][0]] = frame_nlc_quality(quan_yaw, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff, \
 									display_bitrate[el_info[i][0]], VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]])
+
+			average_frame_quality_hit[el_info[i][0]] = frame_nlc_quality_hit(effec_hit, time_eff, display_bitrate[el_info[i][0]], VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]])
+
+			# For hit rate raw calculation
+			average_frame_quality_hit_raw[el_info[i][0]] = Q_a_new + Q_b_new * np.log(VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]])
+			#################################
+
 			frame_quality_record[el_info[i][0]] = 1
 
 			if VP_ET_RATIO * time_eff * el_accuracy * rate_cut[el_info[i][10]][el_info[i][1]] == 0:
@@ -438,6 +471,7 @@ def cmp_show_rates(streaming, video_length, coding_type = 2):
 
 			if time_eff == 0:
 				assert el_accuracy == 0
+
 			receive_bitrate[el_info[i][0]] = 0
 			receive_bitrate[el_info[i][0]] += VP_ET_RATIO * rate_cut[el_info[i][10]][el_info[i][1]]
 
@@ -454,6 +488,16 @@ def cmp_show_rates(streaming, video_length, coding_type = 2):
 	for i in range(len(average_frame_quality)):
 		if frame_quality_record[i] == 0:
 			average_frame_quality[i] += get_quality(display_bitrate[i]/VIDEO_FPS, 0.0, 0.0)
+	######################################
+	# for hit rate
+	for i in range(len(average_frame_quality_hit)):
+		if frame_quality_record[i] == 0:
+			average_frame_quality_hit[i] += get_quality(display_bitrate[i]/VIDEO_FPS, 0.0, 0.0)
+
+	for i in range(len(average_frame_quality_hit_raw)):
+		if frame_quality_record[i] == 0:
+			average_frame_quality_hit_raw[i] += get_quality(display_bitrate[i]/VIDEO_FPS, 0.0, 0.0)
+	######################################
 
 	for i in range(len(new_quality_record)):
 		if new_quality_record[i] == 0:
@@ -513,8 +557,12 @@ def cmp_show_rates(streaming, video_length, coding_type = 2):
 	# plt.gcf().subplots_adjust(bottom=0.20, left=0.1, right=0.97)	
 	# plt.axis([0, video_length, 0, 1200])
 
-	return sum(average_frame_quality) 
-
+	# return sum(average_frame_quality) 
+	######################################
+	# For hitrate
+	return sum(average_frame_quality_hit)		## Right
+	# return sum(average_frame_quality_hit_raw)	## Wrong, upper bound for PI without accuracy
+	######################################
 
 def cal_accuracy(pred_yaw_value, pred_yaw_quan, pred_pitch_value, pred_pitch_quan, real_yaw_trace, real_pitch_trace, time_eff, pred_type = 'quan'):
 	if len(real_yaw_trace) == 0:
@@ -546,6 +594,47 @@ def cal_accuracy(pred_yaw_value, pred_yaw_quan, pred_pitch_value, pred_pitch_qua
 
 	area_accuracy = yaw_eff * pitch_eff
 	return area_accuracy
+
+
+def frame_nlc_quality_hit(real_hit, time_eff, base_rate, et_rate):
+	if len(real_hit) == 0:
+		assert time_eff == 0
+		return get_quality(base_rate/VIDEO_FPS, 0.0, 0.0)
+	
+	base_frame_length = VIDEO_FPS - len(real_hit)
+	quality_without_et = base_frame_length * get_quality(base_rate/VIDEO_FPS, 0.0, 0.0)
+
+	quality_with_et = 0.0
+	for i in range(len(real_hit)):
+		area_accuracy = real_hit[i]
+		quality_with_et_bt = 0.0
+		quality_with_et_et = 0.0
+		# area_accuracy = 1
+
+		if area_accuracy != 0 and area_accuracy != 1:
+			eff_frame_rate_bt = base_rate/VIDEO_FPS
+			eff_frame_rate_et = et_rate/VIDEO_FPS
+			# print(area_accuracy, base_rate/VIDEO_FPS, et_rate/VIDEO_FPS)
+			quality_with_et_bt = get_quality(eff_frame_rate_bt, 0.0, 0.0) * (1.0 - area_accuracy)
+			quality_with_et_et = get_quality(eff_frame_rate_et, 0.0, 0.0) * area_accuracy
+			quality_with_et += quality_with_et_bt
+			quality_with_et += quality_with_et_et
+
+		elif area_accuracy == 0:
+			eff_frame_rate_bt = base_rate/VIDEO_FPS			
+			quality_with_et_bt = get_quality(eff_frame_rate_bt, 0.0, 0.0)
+			quality_with_et += quality_with_et_bt	
+
+		elif area_accuracy == 1:					
+			eff_frame_rate_et = et_rate/VIDEO_FPS 
+			quality_with_et_et = get_quality(eff_frame_rate_et, 0.0, 0.0)
+			quality_with_et += quality_with_et_et
+		else:
+			print("impossible to happen!")
+		
+	per_frame_quality = ((quality_with_et + quality_without_et)/VIDEO_FPS)
+	# print(per_frame_quality)
+	return per_frame_quality
 
 
 def frame_nlc_quality(quan_yaw, quan_pitch, real_yaw_trace, real_pitch_trace, time_eff, base_rate, et_rate):

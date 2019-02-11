@@ -1,7 +1,7 @@
 import scipy.io as sio
 import numpy as np
 import utilities as uti
-import Wigig_streaming_dynamic_fix as wistr
+import Wigig_streaming_dynamic_fix_cmp as wistr
 import os
 
 VIDEO_LEN = 45
