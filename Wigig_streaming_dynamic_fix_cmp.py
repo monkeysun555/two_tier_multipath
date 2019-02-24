@@ -546,29 +546,32 @@ def main():
 def test_all(tp_traces):
 
 	yaw_trace, pitch_trace = comparison.cmp_load_viewport(CMP_VP_TRACE_FILENAME, VIDEO_LEN)
-	hitrate = pickle.load(open(HITRATE_DICT, "rb"))[0]	# For user 0
+	users = [0, 7, 10, 25, 45]
+	for user in users:
+		hitrate = pickle.load(open(HITRATE_DICT, "rb"))[user]	# For user 0
+		print(len(hitrate))
+		rewards = []
+		for i in range(len(tp_traces)):
+			network_trace = tp_traces[i]
+			# print(len(network_trace))
+			average_bw = np.mean(network_trace)
 
-	rewards = []
-	for i in range(len(tp_traces)):
-		network_trace = tp_traces[i]
-		# print(len(network_trace))
-		average_bw = np.mean(network_trace)
+			init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = comparison.cmp_load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, CMP_VP_TRACE_FILENAME, CODING_TYPE)
+			video_trace = uti.generate_video_trace(init_video_rate, VIDEO_LEN)
 
-		init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx = comparison.cmp_load_init_rates(average_bw, REGULAR_CHANNEL_TRACE, CMP_VP_TRACE_FILENAME, CODING_TYPE)
-		video_trace = uti.generate_video_trace(init_video_rate, VIDEO_LEN)
+			streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx, hitrate)
+				
+			streaming_sim.run()
 
-		streaming_sim = Streaming(network_trace, yaw_trace, pitch_trace, video_trace, init_video_rate, optimal_buffer_length, alpha_idx, gamma_idx, hitrate)
-			
-		streaming_sim.run()
+			total_reward = comparison.cmp_show_result(streaming_sim, VIDEO_LEN, CODING_TYPE)
+			rewards.append(total_reward)
 
-		total_reward = comparison.cmp_show_result(streaming_sim, VIDEO_LEN, CODING_TYPE)
-		rewards.append(total_reward)
-
-	print(np.amax(rewards))
-	np.savetxt('cmp_total_rewards.txt', rewards, fmt='%1.2f')
+		print(np.amax(rewards))
+		np.savetxt('cmp_total_rewards_'+ str(user) +'.txt', rewards, fmt='%1.2f')
 	return
 	
 if __name__ == '__main__':
+	# Main is not for comparison testing
 	main()
 
 
