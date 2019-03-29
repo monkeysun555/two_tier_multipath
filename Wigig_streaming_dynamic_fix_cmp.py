@@ -547,10 +547,13 @@ def test_all(tp_traces):
 
 	yaw_trace, pitch_trace = comparison.cmp_load_viewport(CMP_VP_TRACE_FILENAME, VIDEO_LEN)
 	users = [0, 7, 10, 25, 45]
+	# users = [0]
 	for user in users:
 		hitrate = pickle.load(open(HITRATE_DICT, "rb"))[user]	# For user 0
-		print(len(hitrate))
+		# print(len(hitrate))
 		rewards = []
+		rewards_list = []
+		deliver_list = []
 		for i in range(len(tp_traces)):
 			network_trace = tp_traces[i]
 			# print(len(network_trace))
@@ -563,11 +566,16 @@ def test_all(tp_traces):
 				
 			streaming_sim.run()
 
-			total_reward = comparison.cmp_show_result(streaming_sim, VIDEO_LEN, CODING_TYPE)
-			rewards.append(total_reward)
-
-		print(np.amax(rewards))
+			total_reward, deliver_bitrate = comparison.cmp_show_result(streaming_sim, VIDEO_LEN, CODING_TYPE)
+			rewards.append(sum(total_reward))
+			rewards_list.append(total_reward)
+			deliver_list.append(deliver_bitrate)
+			# print total_reward
+		# print(np.amax(rewards))
 		np.savetxt('cmp_total_rewards_'+ str(user) +'.txt', rewards, fmt='%1.2f')
+		# np.savetxt('cmp_list_rewards_'+ str(user) +'.txt', rewards_list[0], fmt='%1.2f')
+		# np.savetxt('cmp_list_delivery_'+ str(user) +'.txt', deliver_list[0], fmt='%1.2f')
+
 	return
 	
 if __name__ == '__main__':

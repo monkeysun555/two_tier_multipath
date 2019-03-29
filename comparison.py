@@ -294,7 +294,7 @@ def cmp_show_result(streaming, video_length, coding_type):
 	# if streaming.dynamic == 1:
 	# 	figures.append([show_rate_cuts(streaming, video_length), 'cuts'])
 
-	total_reward = cmp_show_rates(streaming, video_length, coding_type)
+	total_reward, deliver_bitrate = cmp_show_rates(streaming, video_length, coding_type)
 
 	# figures.append([show_received_rates(streaming, video_length, coding_type),'received_rate'])
 
@@ -328,7 +328,7 @@ def cmp_show_result(streaming, video_length, coding_type):
 	# 		elif streaming.dy_type == 'adaptive':
 	# 			print("adaptive is not for static")
 
-	return total_reward
+	return total_reward, deliver_bitrate
 
 
 # show results
@@ -354,6 +354,8 @@ def cmp_show_rates(streaming, video_length, coding_type = 2):
 	# for hit rate
 	average_frame_quality_hit = [0.0]*video_length
 	average_frame_quality_hit_raw =[0.0]*video_length
+
+
 	# Layered coding
 	if coding_type == 1:
 		for i in range(BUFFER_BL_INIT):
@@ -560,7 +562,8 @@ def cmp_show_rates(streaming, video_length, coding_type = 2):
 	# return sum(average_frame_quality) 
 	######################################
 	# For hitrate
-	return sum(average_frame_quality_hit)		## Right
+	# print average_frame_quality_hit
+	return average_frame_quality_hit,deliver_bitrate		## Right
 	# return sum(average_frame_quality_hit_raw)	## Wrong, upper bound for PI without accuracy
 	######################################
 
